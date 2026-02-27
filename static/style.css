@@ -6,6 +6,22 @@ body {
 }
 main { flex: 1; }
 
+/* ── Navbar link visibility ─────────────────────────────────────────── */
+.navbar-dark .nav-link,
+.navbar-dark .navbar-brand span {
+  color: #fff !important;
+  font-weight: 600;
+  font-size: 0.95rem;
+  letter-spacing: 0.02em;
+}
+.navbar-dark .nav-link:hover,
+.navbar-dark .nav-link:focus {
+  color: #d4edff !important;
+}
+.navbar-dark .nav-link .bi {
+  font-size: 1.05rem;
+}
+
 .stat-card {
   border-left: 4px solid;
   transition: transform .15s;
