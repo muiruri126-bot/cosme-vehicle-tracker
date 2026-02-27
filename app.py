@@ -138,6 +138,16 @@ def check_session_timeout():
         session.permanent = True
 
 
+@app.before_request
+def force_password_change():
+    """Redirect users who must change their password before accessing any page."""
+    if current_user.is_authenticated and getattr(current_user, "must_change_password", False):
+        allowed_endpoints = ("change_password", "logout", "static")
+        if request.endpoint not in allowed_endpoints:
+            flash("You must change your password before continuing.", "warning")
+            return redirect(url_for("change_password"))
+
+
 # ── Role-based access decorator ─────────────────────────────────────────────
 
 
@@ -200,6 +210,7 @@ with app.app_context():
             email="admin@cosme-project.org",
             full_name="System Admin",
             role="admin",
+            must_change_password=True,
         )
         admin.set_password("admin123")
         db.session.add(admin)
@@ -250,6 +261,42 @@ def logout():
     logout_user()
     flash("You have been logged out.", "info")
     return redirect(url_for("login"))
+
+
+@app.route("/change-password", methods=["GET", "POST"])
+@login_required
+def change_password():
+    """Let a user change their own password (also used for forced change on first login)."""
+    forced = current_user.must_change_password
+
+    if request.method == "POST":
+        current_pw = request.form.get("current_password", "")
+        new_pw = request.form.get("new_password", "")
+        confirm_pw = request.form.get("confirm_password", "")
+
+        errors = []
+        if not current_user.check_password(current_pw):
+            errors.append("Current password is incorrect.")
+        if not new_pw or len(new_pw) < 6:
+            errors.append("New password must be at least 6 characters.")
+        if new_pw != confirm_pw:
+            errors.append("New passwords do not match.")
+        if current_pw and new_pw and current_pw == new_pw:
+            errors.append("New password must be different from the current one.")
+
+        if errors:
+            for e in errors:
+                flash(e, "danger")
+            return render_template("auth/change_password.html", forced=forced)
+
+        current_user.set_password(new_pw)
+        current_user.must_change_password = False
+        db.session.commit()
+        log_action("edit", "User", current_user.id, "Changed own password")
+        flash("Your password has been changed successfully.", "success")
+        return redirect(url_for("dashboard"))
+
+    return render_template("auth/change_password.html", forced=forced)
 
 
 @app.route("/register", methods=["GET", "POST"])
@@ -311,6 +358,80 @@ def register():
         return redirect(url_for("login"))
 
     return render_template("auth/register.html")
+
+
+# ── Password reset (self-service) ────────────────────────────────────────────
+
+
+@app.route("/forgot-password", methods=["GET", "POST"])
+@limiter.limit("5/minute")
+def forgot_password():
+    """Let a user request a password-reset email."""
+    if current_user.is_authenticated:
+        return redirect(url_for("dashboard"))
+
+    if request.method == "POST":
+        email = request.form.get("email", "").strip().lower()
+        # Always show the same message to prevent email enumeration
+        flash("If that email is registered, a reset link has been sent.", "info")
+
+        user = User.query.filter_by(email=email).first()
+        if user and user.is_active_user:
+            token = user.generate_reset_token()
+            db.session.commit()
+            reset_url = url_for("reset_password", token=token, _external=True)
+            send_notification(
+                subject="COSME Vehicle Tracker – Password Reset",
+                recipients=[user.email],
+                body=(
+                    f"Hello {user.full_name},\n\n"
+                    f"A password reset was requested for your account ({user.username}).\n\n"
+                    f"Click the link below to reset your password (valid for 24 hours):\n"
+                    f"{reset_url}\n\n"
+                    f"If you did not request this, please ignore this email.\n\n"
+                    f"— COSME Vehicle Tracker"
+                ),
+            )
+        return redirect(url_for("login"))
+
+    return render_template("auth/forgot_password.html")
+
+
+@app.route("/reset-password/<token>", methods=["GET", "POST"])
+@limiter.limit("10/minute")
+def reset_password(token):
+    """Validate a password-reset token and let the user choose a new password."""
+    if current_user.is_authenticated:
+        return redirect(url_for("dashboard"))
+
+    user = User.verify_reset_token(token)
+    if user is None:
+        flash("Invalid or expired reset link. Please request a new one.", "danger")
+        return redirect(url_for("forgot_password"))
+
+    if request.method == "POST":
+        new_pw = request.form.get("new_password", "")
+        confirm_pw = request.form.get("confirm_password", "")
+
+        errors = []
+        if not new_pw or len(new_pw) < 6:
+            errors.append("Password must be at least 6 characters.")
+        if new_pw != confirm_pw:
+            errors.append("Passwords do not match.")
+
+        if errors:
+            for e in errors:
+                flash(e, "danger")
+            return render_template("auth/reset_password.html", token=token)
+
+        user.set_password(new_pw)
+        user.clear_reset_token()
+        user.must_change_password = False
+        db.session.commit()
+        flash("Your password has been reset. Please log in.", "success")
+        return redirect(url_for("login"))
+
+    return render_template("auth/reset_password.html", token=token)
 
 
 # ── User management (admin only) ─────────────────────────────────────────────
@@ -375,6 +496,23 @@ def user_edit(user_id):
     return render_template("auth/user_edit.html", user=user)
 
 
+@app.route("/users/<int:user_id>/reset-password", methods=["POST"])
+@role_required("admin")
+def admin_reset_password(user_id):
+    """Admin action: reset a user's password and force them to change it on next login."""
+    user = db.get_or_404(User, user_id)
+    new_pw = request.form.get("new_password", "").strip()
+    if not new_pw or len(new_pw) < 6:
+        flash("Password must be at least 6 characters.", "danger")
+        return redirect(url_for("user_edit", user_id=user.id))
+    user.set_password(new_pw)
+    user.must_change_password = True
+    db.session.commit()
+    log_action("edit", "User", user.id, f"Admin reset password for '{user.username}' (forced change)")
+    flash(f"Password for {user.username} has been reset. They will be asked to change it on next login.", "success")
+    return redirect(url_for("user_edit", user_id=user.id))
+
+
 @app.route("/users/<int:user_id>/delete", methods=["POST"])
 @role_required("admin")
 def user_delete(user_id):
@@ -396,6 +534,43 @@ def user_delete(user_id):
     log_action("delete", "User", user_id, f"Deleted user '{username_deleted}' and associated records")
     flash(f"User '{username_deleted}' and their associated records have been deleted.", "success")
     return redirect(url_for("user_list"))
+
+
+# ── User profile (self-service) ──────────────────────────────────────────────
+
+
+@app.route("/profile", methods=["GET", "POST"])
+@login_required
+def profile():
+    """Let users view and edit their own profile (full name, email)."""
+    if request.method == "POST":
+        full_name = request.form.get("full_name", "").strip()
+        email = request.form.get("email", "").strip().lower()
+
+        errors = []
+        if not full_name:
+            errors.append("Full name is required.")
+        if not email or "@" not in email or "." not in email.split("@")[-1]:
+            errors.append("A valid email is required.")
+
+        # Email uniqueness (exclude current user)
+        existing = User.query.filter(User.email == email, User.id != current_user.id).first()
+        if existing:
+            errors.append(f"Email '{email}' is already used by another account.")
+
+        if errors:
+            for e in errors:
+                flash(e, "danger")
+            return render_template("auth/profile.html")
+
+        current_user.full_name = full_name
+        current_user.email = email
+        db.session.commit()
+        log_action("edit", "User", current_user.id, f"Updated own profile: name={full_name}, email={email}")
+        flash("Profile updated successfully.", "success")
+        return redirect(url_for("profile"))
+
+    return render_template("auth/profile.html")
 
 
 # ╔═══════════════════════════════════════════════════════════════════════════╗

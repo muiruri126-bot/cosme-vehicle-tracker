@@ -1,0 +1,84 @@
+{% extends "base.html" %}
+{% block title %}My Profile – COSME Vehicle Tracker{% endblock %}
+{% block content %}
+<div class="row justify-content-center mt-4">
+  <div class="col-md-8">
+    <h2 class="mb-3"><i class="bi bi-person-circle"></i> My Profile</h2>
+
+    <div class="card shadow-sm mb-4">
+      <div class="card-header bg-primary text-white">
+        <i class="bi bi-person-lines-fill"></i> Profile Details
+      </div>
+      <div class="card-body">
+        <form method="POST" action="{{ url_for('profile') }}" class="needs-validation" novalidate>
+          <div class="row g-3">
+            <div class="col-md-6">
+              <label for="username" class="form-label">Username</label>
+              <input type="text" class="form-control" id="username"
+                     value="{{ current_user.username }}" disabled>
+              <div class="form-text">Username cannot be changed.</div>
+            </div>
+            <div class="col-md-6">
+              <label class="form-label">Role</label>
+              <input type="text" class="form-control" value="{{ current_user.role | title }}" disabled>
+            </div>
+            <div class="col-md-6">
+              <label for="full_name" class="form-label">Full Name</label>
+              <input type="text" class="form-control" id="full_name"
+                     name="full_name" required value="{{ current_user.full_name }}">
+              <div class="invalid-feedback">Full name is required.</div>
+            </div>
+            <div class="col-md-6">
+              <label for="email" class="form-label">Email</label>
+              <input type="email" class="form-control" id="email"
+                     name="email" required value="{{ current_user.email }}">
+              <div class="invalid-feedback">A valid email is required.</div>
+            </div>
+          </div>
+          <div class="mt-4">
+            <button type="submit" class="btn btn-primary">
+              <i class="bi bi-check-lg"></i> Save Changes
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <!-- Password Change Section -->
+    <div class="card shadow-sm mb-4">
+      <div class="card-header">
+        <i class="bi bi-shield-lock"></i> Password
+      </div>
+      <div class="card-body">
+        <p class="text-muted mb-2">Want to change your password?</p>
+        <a href="{{ url_for('change_password') }}" class="btn btn-outline-primary">
+          <i class="bi bi-key"></i> Change Password
+        </a>
+      </div>
+    </div>
+
+    <!-- Account Info Section -->
+    <div class="card shadow-sm">
+      <div class="card-header">
+        <i class="bi bi-info-circle"></i> Account Information
+      </div>
+      <div class="card-body">
+        <div class="row">
+          <div class="col-md-4">
+            <strong>Account Status:</strong>
+            {% if current_user.is_active_user %}
+            <span class="badge bg-success">Active</span>
+            {% else %}
+            <span class="badge bg-danger">Inactive</span>
+            {% endif %}
+          </div>
+          <div class="col-md-4">
+            <strong>Member Since:</strong>
+            {{ current_user.created_at.strftime('%d %b %Y') if current_user.created_at else 'N/A' }}
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

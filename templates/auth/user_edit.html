@@ -44,4 +44,29 @@
     </form>
   </div>
 </div>
+
+<!-- Admin Password Reset -->
+<div class="card shadow-sm mt-4">
+  <div class="card-header">
+    <i class="bi bi-shield-lock"></i> Reset User Password
+  </div>
+  <div class="card-body">
+    <p class="text-muted">Set a new temporary password for this user. They will be required to change it on their next login.</p>
+    <form method="POST" action="{{ url_for('admin_reset_password', user_id=user.id) }}" class="needs-validation" novalidate>
+      <div class="row g-3">
+        <div class="col-md-6">
+          <label for="new_password" class="form-label">New Password</label>
+          <input type="password" class="form-control" id="new_password"
+                 name="new_password" required minlength="6">
+          <div class="invalid-feedback">Password must be at least 6 characters.</div>
+        </div>
+        <div class="col-md-6 d-flex align-items-end">
+          <button type="submit" class="btn btn-warning">
+            <i class="bi bi-arrow-repeat"></i> Reset Password
+          </button>
+        </div>
+      </div>
+    </form>
+  </div>
+</div>
 {% endblock %}

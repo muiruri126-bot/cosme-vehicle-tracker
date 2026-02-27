@@ -3,7 +3,8 @@ COSME Project – Vehicle Tracker
 SQLAlchemy models for User, Vehicle, Booking, Trip, and MaintenanceRecord.
 """
 
-from datetime import datetime, timezone
+import secrets
+from datetime import datetime, timedelta, timezone
 
 from flask_login import UserMixin
 from flask_sqlalchemy import SQLAlchemy
@@ -27,6 +28,9 @@ class User(UserMixin, db.Model):
         db.String(20), nullable=False, default="requester"
     )  # admin | driver | requester
     is_active_user = db.Column(db.Boolean, nullable=False, default=True)
+    must_change_password = db.Column(db.Boolean, nullable=False, default=False)
+    password_reset_token = db.Column(db.String(128), nullable=True, unique=True)
+    password_reset_expiry = db.Column(db.DateTime, nullable=True)
     created_at = db.Column(
         db.DateTime, nullable=False, default=lambda: datetime.now(timezone.utc)
     )
@@ -44,6 +48,32 @@ class User(UserMixin, db.Model):
 
     def check_password(self, password):
         return check_password_hash(self.password_hash, password)
+
+    def generate_reset_token(self, expires_hours=24):
+        """Generate a unique password-reset token valid for *expires_hours*."""
+        self.password_reset_token = secrets.token_urlsafe(48)
+        self.password_reset_expiry = datetime.now(timezone.utc) + timedelta(hours=expires_hours)
+        return self.password_reset_token
+
+    @staticmethod
+    def verify_reset_token(token):
+        """Return the User associated with *token* if it is still valid, else None."""
+        user = User.query.filter_by(password_reset_token=token).first()
+        if user is None:
+            return None
+        if user.password_reset_expiry is None:
+            return None
+        expiry = user.password_reset_expiry
+        if hasattr(expiry, "tzinfo") and expiry.tzinfo is None:
+            expiry = expiry.replace(tzinfo=timezone.utc)
+        if datetime.now(timezone.utc) > expiry:
+            return None
+        return user
+
+    def clear_reset_token(self):
+        """Remove the reset token after successful use."""
+        self.password_reset_token = None
+        self.password_reset_expiry = None
 
     @property
     def is_admin(self):
