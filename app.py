@@ -23,7 +23,7 @@ A default **admin** account is created on first run:
 
 import io
 import os
-from datetime import datetime
+from datetime import datetime, timedelta
 from functools import wraps
 
 from flask import (
@@ -36,6 +36,7 @@ from flask import (
     render_template,
     request,
     send_file,
+    session,
     url_for,
 )
 from flask_login import (
@@ -70,6 +71,9 @@ app.config["SQLALCHEMY_DATABASE_URI"] = os.environ.get(
 app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
 app.config["SECRET_KEY"] = os.environ.get("SECRET_KEY", "cosme-dev-secret-key")
 
+# ── Session timeout (15 minutes of inactivity) ──────────────────────────────
+app.config["PERMANENT_SESSION_LIFETIME"] = timedelta(minutes=15)
+
 # ── Mail config (disabled by default – set MAIL_ENABLED=1 env var to turn on)
 app.config["MAIL_ENABLED"] = os.environ.get("MAIL_ENABLED", "0") == "1"
 app.config["MAIL_SERVER"] = os.environ.get("MAIL_SERVER", "smtp.gmail.com")
@@ -95,6 +99,23 @@ login_manager.login_message_category = "warning"
 @login_manager.user_loader
 def load_user(user_id):
     return User.query.get(int(user_id))
+
+
+@app.before_request
+def check_session_timeout():
+    """Log out the user if they have been inactive for more than 15 minutes."""
+    if current_user.is_authenticated:
+        now = datetime.utcnow()
+        last_active = session.get("last_active")
+        if last_active is not None:
+            elapsed = (now - last_active).total_seconds()
+            if elapsed > 15 * 60:  # 15 minutes
+                logout_user()
+                session.clear()
+                flash("Your session has expired due to inactivity. Please log in again.", "warning")
+                return redirect(url_for("login"))
+        session["last_active"] = now
+        session.permanent = True
 
 
 # ── Role-based access decorator ─────────────────────────────────────────────
