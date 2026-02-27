@@ -109,6 +109,9 @@ def check_session_timeout():
         now = datetime.utcnow()
         last_active = session.get("last_active")
         if last_active is not None:
+            # Strip any timezone info so both datetimes are naive
+            if hasattr(last_active, 'tzinfo') and last_active.tzinfo is not None:
+                last_active = last_active.replace(tzinfo=None)
             elapsed = (now - last_active).total_seconds()
             if elapsed > 15 * 60:  # 15 minutes
                 logout_user()
