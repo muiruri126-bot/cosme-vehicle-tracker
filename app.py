@@ -553,6 +553,47 @@ def booking_add():
         db.session.add(booking)
         db.session.commit()
         flash("Booking request created (status: pending).", "success")
+
+        # ── Notify all admins about the new booking request ────────────
+        admins = User.query.filter_by(role="admin", is_active_user=True).all()
+        admin_emails = [a.email for a in admins if a.email]
+        if admin_emails:
+            send_notification(
+                subject=f"New Booking Request #{booking.id} – COSME Vehicle Tracker",
+                recipients=admin_emails,
+                body=(
+                    f"Hello Admin,\n\n"
+                    f"A new vehicle booking request has been submitted.\n\n"
+                    f"Booking #: {booking.id}\n"
+                    f"Requested by: {booking.requester_name}\n"
+                    f"Vehicle: {booking.vehicle.registration_number}\n"
+                    f"Route: {booking.route_from} → {booking.route_to}\n"
+                    f"Purpose: {booking.purpose}\n"
+                    f"From: {booking.start_datetime_planned.strftime('%d %b %Y %H:%M')}\n"
+                    f"To: {booking.end_datetime_planned.strftime('%d %b %Y %H:%M')}\n\n"
+                    f"Please log in to review and approve/reject this request.\n\n"
+                    f"– COSME Vehicle Tracker"
+                ),
+            )
+        # ── Confirm to the requester that their request was received ──
+        if current_user.email:
+            send_notification(
+                subject=f"Booking Request #{booking.id} Received – COSME Vehicle Tracker",
+                recipients=[current_user.email],
+                body=(
+                    f"Hello {current_user.full_name},\n\n"
+                    f"Your vehicle booking request has been submitted successfully.\n\n"
+                    f"Booking #: {booking.id}\n"
+                    f"Vehicle: {booking.vehicle.registration_number}\n"
+                    f"Route: {booking.route_from} → {booking.route_to}\n"
+                    f"From: {booking.start_datetime_planned.strftime('%d %b %Y %H:%M')}\n"
+                    f"To: {booking.end_datetime_planned.strftime('%d %b %Y %H:%M')}\n\n"
+                    f"Status: PENDING – awaiting admin approval.\n"
+                    f"You will receive another email once your request is approved or cancelled.\n\n"
+                    f"– COSME Vehicle Tracker"
+                ),
+            )
+
         return redirect(url_for("booking_list"))
 
     return render_template("bookings/add.html", vehicles=vehicles, drivers=drivers)
@@ -670,6 +711,40 @@ def booking_cancel(booking_id):
         booking.status = "cancelled"
         db.session.commit()
         flash("Booking cancelled.", "info")
+
+        # ── Notify the requester that their booking was cancelled ─────
+        if booking.requester and booking.requester.email:
+            cancelled_by = current_user.full_name
+            send_notification(
+                subject=f"Booking #{booking.id} Cancelled – COSME Vehicle Tracker",
+                recipients=[booking.requester.email],
+                body=(
+                    f"Hello {booking.requester_name},\n\n"
+                    f"Your vehicle booking #{booking.id} has been cancelled"
+                    f"{' by ' + cancelled_by if cancelled_by != booking.requester_name else ''}.\n\n"
+                    f"Vehicle: {booking.vehicle.registration_number}\n"
+                    f"Route: {booking.route_from} → {booking.route_to}\n"
+                    f"From: {booking.start_datetime_planned.strftime('%d %b %Y %H:%M')}\n"
+                    f"To: {booking.end_datetime_planned.strftime('%d %b %Y %H:%M')}\n\n"
+                    f"If you have questions, please contact the admin.\n\n"
+                    f"– COSME Vehicle Tracker"
+                ),
+            )
+        # ── Notify assigned driver if any ─────────────────────────────
+        if booking.driver and booking.driver.email:
+            send_notification(
+                subject=f"Booking #{booking.id} Cancelled – COSME Vehicle Tracker",
+                recipients=[booking.driver.email],
+                body=(
+                    f"Hello {booking.driver.full_name},\n\n"
+                    f"Booking #{booking.id} you were assigned to has been cancelled.\n\n"
+                    f"Vehicle: {booking.vehicle.registration_number}\n"
+                    f"Route: {booking.route_from} → {booking.route_to}\n"
+                    f"From: {booking.start_datetime_planned.strftime('%d %b %Y %H:%M')}\n"
+                    f"To: {booking.end_datetime_planned.strftime('%d %b %Y %H:%M')}\n\n"
+                    f"– COSME Vehicle Tracker"
+                ),
+            )
     else:
         flash("This booking cannot be cancelled.", "warning")
     return redirect(url_for("booking_detail", booking_id=booking.id))
