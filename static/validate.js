@@ -6,6 +6,23 @@
 (function () {
   "use strict";
 
+  // ── CSRF token auto-inject ───────────────────────────────────────────────
+  // Reads the token from the <meta name="csrf-token"> tag and injects a
+  // hidden input into every POST form that doesn't already have one.
+  var csrfMeta = document.querySelector('meta[name="csrf-token"]');
+  if (csrfMeta) {
+    var token = csrfMeta.getAttribute("content");
+    document.querySelectorAll('form[method="POST"], form[method="post"]').forEach(function (form) {
+      if (!form.querySelector('input[name="csrf_token"]')) {
+        var input = document.createElement("input");
+        input.type = "hidden";
+        input.name = "csrf_token";
+        input.value = token;
+        form.appendChild(input);
+      }
+    });
+  }
+
   // ── Bootstrap validated forms ────────────────────────────────────────────
   // Any form with class .needs-validation gets client-side checks.
   document.querySelectorAll("form.needs-validation").forEach(function (form) {

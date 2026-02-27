@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% from "macros/pagination.html" import render_pagination %}
 {% block title %}Maintenance – COSME Vehicle Tracker{% endblock %}
 {% block content %}
 <div class="d-flex justify-content-between align-items-center mb-3">
@@ -97,4 +98,5 @@
 {% else %}
 <p class="text-muted">No maintenance records found.</p>
 {% endif %}
+{{ render_pagination(pagination, 'maintenance_list', extra_args={'status': current_status}) }}
 {% endblock %}

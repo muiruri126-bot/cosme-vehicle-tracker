@@ -23,9 +23,11 @@ A default **admin** account is created on first run:
 
 import io
 import os
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from functools import wraps
+from urllib.parse import urlsplit
 
+from dotenv import load_dotenv
 from flask import (
     Flask,
     Response,
@@ -39,6 +41,8 @@ from flask import (
     session,
     url_for,
 )
+from flask_limiter import Limiter
+from flask_limiter.util import get_remote_address
 from flask_login import (
     LoginManager,
     current_user,
@@ -47,6 +51,7 @@ from flask_login import (
     logout_user,
 )
 from flask_mail import Mail, Message
+from flask_wtf.csrf import CSRFProtect
 from openpyxl import Workbook
 from openpyxl.styles import Alignment, Font, PatternFill
 
@@ -63,12 +68,18 @@ from models import (
 
 # ── App & config ─────────────────────────────────────────────────────────────
 
+load_dotenv()  # load .env file if present
+
 app = Flask(__name__)
 
 basedir = os.path.abspath(os.path.dirname(__file__))
-app.config["SQLALCHEMY_DATABASE_URI"] = os.environ.get(
+database_url = os.environ.get(
     "DATABASE_URL", "sqlite:///" + os.path.join(basedir, "tracker.db")
 )
+# Heroku / PythonAnywhere may provide postgres:// but SQLAlchemy 2.x needs postgresql://
+if database_url.startswith("postgres://"):
+    database_url = database_url.replace("postgres://", "postgresql://", 1)
+app.config["SQLALCHEMY_DATABASE_URI"] = database_url
 app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
 app.config["SECRET_KEY"] = os.environ.get("SECRET_KEY", "cosme-dev-secret-key")
 
@@ -88,6 +99,11 @@ app.config["MAIL_DEFAULT_SENDER"] = os.environ.get(
 
 db.init_app(app)
 mail = Mail(app)
+csrf = CSRFProtect(app)
+limiter = Limiter(app=app, key_func=get_remote_address, default_limits=[])
+
+# ── Pagination ───────────────────────────────────────────────────────────────
+PER_PAGE = 20
 
 # ── Flask-Login setup ────────────────────────────────────────────────────────
 
@@ -99,19 +115,19 @@ login_manager.login_message_category = "warning"
 
 @login_manager.user_loader
 def load_user(user_id):
-    return User.query.get(int(user_id))
+    return db.session.get(User, int(user_id))
 
 
 @app.before_request
 def check_session_timeout():
     """Log out the user if they have been inactive for more than 15 minutes."""
     if current_user.is_authenticated:
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc)
         last_active = session.get("last_active")
         if last_active is not None:
-            # Strip any timezone info so both datetimes are naive
-            if hasattr(last_active, 'tzinfo') and last_active.tzinfo is not None:
-                last_active = last_active.replace(tzinfo=None)
+            # Ensure last_active is timezone-aware (UTC) for safe subtraction
+            if hasattr(last_active, 'tzinfo') and last_active.tzinfo is None:
+                last_active = last_active.replace(tzinfo=timezone.utc)
             elapsed = (now - last_active).total_seconds()
             if elapsed > 15 * 60:  # 15 minutes
                 logout_user()
@@ -196,6 +212,7 @@ with app.app_context():
 
 
 @app.route("/login", methods=["GET", "POST"])
+@limiter.limit("10/minute")
 def login():
     if current_user.is_authenticated:
         return redirect(url_for("dashboard"))
@@ -216,6 +233,11 @@ def login():
             login_user(user)
             flash(f"Welcome back, {user.full_name}!", "success")
             next_page = request.args.get("next")
+            # Prevent open-redirect: reject absolute URLs
+            if next_page:
+                parsed = urlsplit(next_page)
+                if parsed.netloc or parsed.scheme:
+                    next_page = None
             return redirect(next_page or url_for("dashboard"))
         flash("Invalid username or password.", "danger")
 
@@ -231,6 +253,7 @@ def logout():
 
 
 @app.route("/register", methods=["GET", "POST"])
+@limiter.limit("5/minute")
 def register():
     if request.method == "POST":
         full_name = request.form.get("full_name", "").strip()
@@ -296,14 +319,17 @@ def register():
 @app.route("/users")
 @role_required("admin")
 def user_list():
-    users = User.query.order_by(User.full_name).all()
-    return render_template("auth/user_list.html", users=users)
+    page = request.args.get("page", 1, type=int)
+    pagination = User.query.order_by(User.full_name).paginate(
+        page=page, per_page=PER_PAGE, error_out=False
+    )
+    return render_template("auth/user_list.html", users=pagination.items, pagination=pagination)
 
 
 @app.route("/users/<int:user_id>/edit", methods=["GET", "POST"])
 @role_required("admin")
 def user_edit(user_id):
-    user = User.query.get_or_404(user_id)
+    user = db.get_or_404(User, user_id)
     if request.method == "POST":
         full_name = request.form.get("full_name", "").strip()
         email = request.form.get("email", "").strip().lower()
@@ -352,7 +378,7 @@ def user_edit(user_id):
 @app.route("/users/<int:user_id>/delete", methods=["POST"])
 @role_required("admin")
 def user_delete(user_id):
-    user = User.query.get_or_404(user_id)
+    user = db.get_or_404(User, user_id)
     if user.id == current_user.id:
         flash("You cannot delete your own account.", "danger")
         return redirect(url_for("user_list"))
@@ -406,8 +432,11 @@ def dashboard():
 @app.route("/vehicles")
 @login_required
 def vehicle_list():
-    vehicles = Vehicle.query.order_by(Vehicle.registration_number).all()
-    return render_template("vehicles/list.html", vehicles=vehicles)
+    page = request.args.get("page", 1, type=int)
+    pagination = Vehicle.query.order_by(Vehicle.registration_number).paginate(
+        page=page, per_page=PER_PAGE, error_out=False
+    )
+    return render_template("vehicles/list.html", vehicles=pagination.items, pagination=pagination)
 
 
 @app.route("/vehicles/add", methods=["GET", "POST"])
@@ -457,7 +486,7 @@ def vehicle_add():
 @app.route("/vehicles/<int:vehicle_id>/edit", methods=["GET", "POST"])
 @role_required("admin")
 def vehicle_edit(vehicle_id):
-    vehicle = Vehicle.query.get_or_404(vehicle_id)
+    vehicle = db.get_or_404(Vehicle, vehicle_id)
     if request.method == "POST":
         reg = request.form.get("registration_number", "").strip().upper()
         make = request.form.get("make", "").strip()
@@ -503,7 +532,7 @@ def vehicle_edit(vehicle_id):
 @app.route("/vehicles/<int:vehicle_id>/delete", methods=["POST"])
 @role_required("admin")
 def vehicle_delete(vehicle_id):
-    vehicle = Vehicle.query.get_or_404(vehicle_id)
+    vehicle = db.get_or_404(Vehicle, vehicle_id)
     # Delete associated maintenance records
     for rec in vehicle.maintenance_records:
         db.session.delete(rec)
@@ -528,13 +557,17 @@ def vehicle_delete(vehicle_id):
 @login_required
 def booking_list():
     status_filter = request.args.get("status", "")
+    page = request.args.get("page", 1, type=int)
     query = Booking.query
     if status_filter:
         query = query.filter_by(status=status_filter)
-    bookings = query.order_by(Booking.start_datetime_planned.desc()).all()
+    pagination = query.order_by(Booking.start_datetime_planned.desc()).paginate(
+        page=page, per_page=PER_PAGE, error_out=False
+    )
     return render_template(
         "bookings/list.html",
-        bookings=bookings,
+        bookings=pagination.items,
+        pagination=pagination,
         current_status=status_filter,
     )
 
@@ -595,7 +628,7 @@ def booking_add():
 
         # ── Vehicle status check ──────────────────────────────────────
         if vehicle_id:
-            veh = Vehicle.query.get(vehicle_id)
+            veh = db.session.get(Vehicle, vehicle_id)
             if not veh:
                 errors.append("Selected vehicle does not exist.")
             elif veh.status == "maintenance":
@@ -638,6 +671,23 @@ def booking_add():
             status="pending",
         )
         db.session.add(booking)
+        db.session.flush()  # assign ID before re-checking
+
+        # Double-check for conflicts after flush to reduce race window
+        conflict = check_booking_conflict(vehicle_id, start_dt, end_dt, exclude_booking_id=booking.id)
+        if conflict:
+            db.session.rollback()
+            flash(
+                f"This vehicle is already booked between "
+                f"{conflict.start_datetime_planned.strftime('%Y-%m-%d %H:%M')} and "
+                f"{conflict.end_datetime_planned.strftime('%Y-%m-%d %H:%M')} "
+                f"(Booking #{conflict.id} by {conflict.requester_name}).",
+                "danger",
+            )
+            return render_template(
+                "bookings/add.html", vehicles=vehicles, drivers=drivers
+            )
+
         db.session.commit()
         log_action("create", "Booking", booking.id, f"Created booking: vehicle={booking.vehicle.registration_number}, route={route_from}→{route_to}")
         flash("Booking request created (status: pending).", "success")
@@ -690,7 +740,7 @@ def booking_add():
 @app.route("/bookings/<int:booking_id>")
 @login_required
 def booking_detail(booking_id):
-    booking = Booking.query.get_or_404(booking_id)
+    booking = db.get_or_404(Booking, booking_id)
     drivers = User.query.filter_by(role="driver").order_by(User.full_name).all()
     return render_template("bookings/detail.html", booking=booking, drivers=drivers)
 
@@ -699,7 +749,7 @@ def booking_detail(booking_id):
 @role_required("admin")
 def booking_approve(booking_id):
     """Approve a pending booking – but only if there is NO overlap conflict."""
-    booking = Booking.query.get_or_404(booking_id)
+    booking = db.get_or_404(Booking, booking_id)
 
     if booking.status != "pending":
         flash("Only pending bookings can be approved.", "warning")
@@ -765,7 +815,7 @@ def booking_approve(booking_id):
 @role_required("admin")
 def booking_assign_driver(booking_id):
     """Assign or change the driver for a booking."""
-    booking = Booking.query.get_or_404(booking_id)
+    booking = db.get_or_404(Booking, booking_id)
     driver_id = request.form.get("driver_id")
     booking.driver_id = int(driver_id) if driver_id else None
     db.session.commit()
@@ -796,7 +846,7 @@ def booking_assign_driver(booking_id):
 @app.route("/bookings/<int:booking_id>/cancel", methods=["POST"])
 @login_required
 def booking_cancel(booking_id):
-    booking = Booking.query.get_or_404(booking_id)
+    booking = db.get_or_404(Booking, booking_id)
     if booking.status in ("pending", "approved"):
         booking.status = "cancelled"
         db.session.commit()
@@ -844,7 +894,7 @@ def booking_cancel(booking_id):
 @app.route("/bookings/<int:booking_id>/delete", methods=["POST"])
 @role_required("admin")
 def booking_delete(booking_id):
-    booking = Booking.query.get_or_404(booking_id)
+    booking = db.get_or_404(Booking, booking_id)
     vehicle_reg = booking.vehicle.registration_number
     # Delete associated trip first
     if booking.trip:
@@ -865,7 +915,7 @@ def booking_delete(booking_id):
 @login_required
 def trip_start(booking_id):
     """Record the actual start of a trip (for an approved booking)."""
-    booking = Booking.query.get_or_404(booking_id)
+    booking = db.get_or_404(Booking, booking_id)
 
     if booking.status != "approved":
         flash("Only approved bookings can start a trip.", "warning")
@@ -926,7 +976,7 @@ def trip_start(booking_id):
 @login_required
 def trip_end(booking_id):
     """Record the actual end of a trip and mark the booking as completed."""
-    booking = Booking.query.get_or_404(booking_id)
+    booking = db.get_or_404(Booking, booking_id)
     trip = booking.trip
 
     if trip is None or trip.end_actual_datetime is not None:
@@ -1023,13 +1073,17 @@ def trip_end(booking_id):
 @login_required
 def maintenance_list():
     status_filter = request.args.get("status", "")
+    page = request.args.get("page", 1, type=int)
     query = MaintenanceRecord.query
     if status_filter:
         query = query.filter_by(status=status_filter)
-    records = query.order_by(MaintenanceRecord.scheduled_date.desc()).all()
+    pagination = query.order_by(MaintenanceRecord.scheduled_date.desc()).paginate(
+        page=page, per_page=PER_PAGE, error_out=False
+    )
     return render_template(
         "maintenance/list.html",
-        records=records,
+        records=pagination.items,
+        pagination=pagination,
         current_status=status_filter,
     )
 
@@ -1107,9 +1161,9 @@ def maintenance_add():
 @app.route("/maintenance/<int:rec_id>/complete", methods=["POST"])
 @role_required("admin")
 def maintenance_complete(rec_id):
-    rec = MaintenanceRecord.query.get_or_404(rec_id)
+    rec = db.get_or_404(MaintenanceRecord, rec_id)
     rec.status = "completed"
-    rec.completed_date = datetime.utcnow().date()
+    rec.completed_date = datetime.now(timezone.utc).date()
     if request.form.get("cost"):
         rec.cost = float(request.form["cost"])
     # Set vehicle back to available
@@ -1123,7 +1177,7 @@ def maintenance_complete(rec_id):
 @app.route("/maintenance/<int:rec_id>/cancel", methods=["POST"])
 @role_required("admin")
 def maintenance_cancel(rec_id):
-    rec = MaintenanceRecord.query.get_or_404(rec_id)
+    rec = db.get_or_404(MaintenanceRecord, rec_id)
     rec.status = "cancelled"
     if rec.vehicle.status == "maintenance":
         rec.vehicle.status = "available"
@@ -1136,7 +1190,7 @@ def maintenance_cancel(rec_id):
 @app.route("/maintenance/<int:rec_id>/delete", methods=["POST"])
 @role_required("admin")
 def maintenance_delete(rec_id):
-    rec = MaintenanceRecord.query.get_or_404(rec_id)
+    rec = db.get_or_404(MaintenanceRecord, rec_id)
     vehicle_reg = rec.vehicle.registration_number
     db.session.delete(rec)
     db.session.commit()
@@ -1233,7 +1287,7 @@ def vehicle_report_export():
     dt_from = datetime.fromisoformat(date_from)
     dt_to = datetime.fromisoformat(date_to + "T23:59:59")
 
-    vehicle = Vehicle.query.get_or_404(selected_vehicle_id)
+    vehicle = db.get_or_404(Vehicle, selected_vehicle_id)
 
     trips = (
         Trip.query.join(Booking)
@@ -1344,10 +1398,13 @@ def api_bookings():
 
     events = []
     for b in bookings:
+        # Sanitise user-provided fields for defence-in-depth
+        safe_from = (b.route_from or "").replace("<", "&lt;").replace(">", "&gt;")
+        safe_to = (b.route_to or "").replace("<", "&lt;").replace(">", "&gt;")
         events.append(
             {
                 "id": b.id,
-                "title": f"{b.vehicle.registration_number} – {b.route_from}→{b.route_to}",
+                "title": f"{b.vehicle.registration_number} – {safe_from}→{safe_to}",
                 "start": b.start_datetime_planned.isoformat(),
                 "end": b.end_datetime_planned.isoformat(),
                 "url": url_for("booking_detail", booking_id=b.id),
@@ -1368,6 +1425,7 @@ def audit_log():
     """Show the audit trail of all create / edit / delete actions."""
     entity_filter = request.args.get("entity", "")
     action_filter = request.args.get("action", "")
+    page = request.args.get("page", 1, type=int)
 
     query = AuditLog.query
     if entity_filter:
@@ -1375,10 +1433,13 @@ def audit_log():
     if action_filter:
         query = query.filter_by(action=action_filter)
 
-    logs = query.order_by(AuditLog.timestamp.desc()).limit(500).all()
+    pagination = query.order_by(AuditLog.timestamp.desc()).paginate(
+        page=page, per_page=PER_PAGE, error_out=False
+    )
     return render_template(
         "audit_log.html",
-        logs=logs,
+        logs=pagination.items,
+        pagination=pagination,
         current_entity=entity_filter,
         current_action=action_filter,
     )
