@@ -1,0 +1,36 @@
+{% extends "base.html" %}
+{% block title %}Login – COSME Vehicle Tracker{% endblock %}
+{% block content %}
+<div class="row justify-content-center mt-5">
+  <div class="col-md-5">
+    <div class="card shadow">
+      <div class="card-body">
+        <h3 class="card-title text-center mb-4">
+          <i class="bi bi-truck"></i> COSME Vehicle Tracker
+        </h3>
+        <form method="POST" action="{{ url_for('login') }}" class="needs-validation" novalidate>
+          <div class="mb-3">
+            <label for="username" class="form-label">Username</label>
+            <input type="text" class="form-control" id="username"
+                   name="username" required autofocus placeholder="Enter your username">
+            <div class="invalid-feedback">Please enter your username.</div>
+          </div>
+          <div class="mb-3">
+            <label for="password" class="form-label">Password</label>
+            <input type="password" class="form-control" id="password"
+                   name="password" required placeholder="Enter your password">
+            <div class="invalid-feedback">Please enter your password.</div>
+          </div>
+          <button type="submit" class="btn btn-primary w-100 mb-3">
+            <i class="bi bi-box-arrow-in-right"></i> Login
+          </button>
+        </form>
+        <p class="text-center text-muted mb-0">
+          Don't have an account?
+          <a href="{{ url_for('register') }}">Register here</a>
+        </p>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

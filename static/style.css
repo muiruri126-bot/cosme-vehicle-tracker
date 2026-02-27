@@ -1,0 +1,16 @@
+/* COSME Vehicle Tracker – custom overrides */
+body {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+}
+main { flex: 1; }
+
+.stat-card {
+  border-left: 4px solid;
+  transition: transform .15s;
+}
+.stat-card:hover { transform: translateY(-2px); }
+.stat-card.vehicles  { border-left-color: #0d6efd; }
+.stat-card.pending   { border-left-color: #ffc107; }
+.stat-card.approved  { border-left-color: #198754; }

@@ -1,0 +1,47 @@
+{% extends "base.html" %}
+{% block title %}Edit User – COSME Vehicle Tracker{% endblock %}
+{% block content %}
+<h2 class="mb-3">Edit User – {{ user.username }}</h2>
+
+<div class="card shadow-sm">
+  <div class="card-body">
+    <form method="POST" action="{{ url_for('user_edit', user_id=user.id) }}" class="needs-validation" novalidate>
+      <div class="row g-3">
+        <div class="col-md-6">
+          <label for="full_name" class="form-label">Full Name</label>
+          <input type="text" class="form-control" id="full_name"
+                 name="full_name" required value="{{ user.full_name }}">
+          <div class="invalid-feedback">Full name is required.</div>
+        </div>
+        <div class="col-md-6">
+          <label for="email" class="form-label">Email</label>
+          <input type="email" class="form-control" id="email"
+                 name="email" required value="{{ user.email }}">
+          <div class="invalid-feedback">A valid email is required.</div>
+        </div>
+        <div class="col-md-4">
+          <label for="role" class="form-label">Role</label>
+          <select class="form-select" id="role" name="role">
+            <option value="requester" {{ 'selected' if user.role == 'requester' }}>Requester</option>
+            <option value="driver" {{ 'selected' if user.role == 'driver' }}>Driver</option>
+            <option value="admin" {{ 'selected' if user.role == 'admin' }}>Admin</option>
+          </select>
+        </div>
+        <div class="col-md-4 d-flex align-items-end">
+          <div class="form-check">
+            <input class="form-check-input" type="checkbox" id="is_active_user"
+                   name="is_active_user" {{ 'checked' if user.is_active_user }}>
+            <label class="form-check-label" for="is_active_user">Active Account</label>
+          </div>
+        </div>
+      </div>
+      <div class="mt-4">
+        <button type="submit" class="btn btn-primary">
+          <i class="bi bi-check-lg"></i> Update User
+        </button>
+        <a href="{{ url_for('user_list') }}" class="btn btn-outline-secondary ms-2">Cancel</a>
+      </div>
+    </form>
+  </div>
+</div>
+{% endblock %}

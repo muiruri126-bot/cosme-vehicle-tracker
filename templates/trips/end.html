@@ -1,0 +1,62 @@
+{% extends "base.html" %}
+{% block title %}End Trip – Booking #{{ booking.id }}{% endblock %}
+{% block content %}
+<h2 class="mb-3">End Trip – Booking #{{ booking.id }}</h2>
+
+<div class="card shadow-sm mb-3">
+  <div class="card-body">
+    <p><strong>Vehicle:</strong> {{ booking.vehicle.registration_number }}
+       ({{ booking.vehicle.make }} {{ booking.vehicle.model }})</p>
+    <p><strong>Route:</strong> {{ booking.route_from }} → {{ booking.route_to }}</p>
+    <p><strong>Trip started at:</strong>
+       {{ trip.start_actual_datetime.strftime('%d %b %Y %H:%M') }}</p>
+    <p><strong>Odometer at start:</strong> {{ trip.odometer_start }} km</p>
+  </div>
+</div>
+
+<div class="card shadow-sm">
+  <div class="card-body">
+    <form method="POST" action="{{ url_for('trip_end', booking_id=booking.id) }}" class="needs-validation" novalidate>
+      <div class="row g-3">
+        <div class="col-md-6">
+          <label for="end_actual_datetime" class="form-label">Actual End Date/Time</label>
+          <input type="datetime-local" class="form-control" id="end_actual_datetime"
+                 name="end_actual_datetime" required>
+          <div class="invalid-feedback">End date/time is required.</div>
+        </div>
+        <div class="col-md-6">
+          <label for="odometer_end" class="form-label">Odometer Reading (km)</label>
+          <input type="number" class="form-control" id="odometer_end"
+                 name="odometer_end" required min="{{ trip.odometer_start }}"
+                 placeholder="Must be ≥ {{ trip.odometer_start }}">
+          <div class="invalid-feedback">Must be ≥ {{ trip.odometer_start }} (start reading).</div>
+        </div>
+        <div class="col-md-6">
+          <label for="fuel_used" class="form-label">Fuel Used (litres) <small class="text-muted">– optional</small></label>
+          <input type="number" step="0.1" class="form-control" id="fuel_used"
+                 name="fuel_used" min="0" placeholder="e.g. 35.5">
+          <div class="invalid-feedback">Cannot be negative.</div>
+        </div>
+        <div class="col-md-6">
+          <label for="fuel_cost" class="form-label">Fuel Cost <small class="text-muted">– optional</small></label>
+          <input type="number" step="0.01" class="form-control" id="fuel_cost"
+                 name="fuel_cost" min="0" placeholder="e.g. 5250.00">
+          <div class="invalid-feedback">Cannot be negative.</div>
+        </div>
+        <div class="col-12">
+          <label for="remarks" class="form-label">Remarks <small class="text-muted">– optional</small></label>
+          <textarea class="form-control" id="remarks" name="remarks"
+                    rows="2" placeholder="Any notes about the trip"></textarea>
+        </div>
+      </div>
+      <div class="mt-4">
+        <button type="submit" class="btn btn-warning">
+          <i class="bi bi-stop-circle"></i> End Trip
+        </button>
+        <a href="{{ url_for('booking_detail', booking_id=booking.id) }}"
+           class="btn btn-outline-secondary ms-2">Cancel</a>
+      </div>
+    </form>
+  </div>
+</div>
+{% endblock %}

@@ -1,0 +1,93 @@
+{% extends "base.html" %}
+{% block title %}New Booking – COSME Vehicle Tracker{% endblock %}
+{% block content %}
+<h2 class="mb-3">New Booking Request</h2>
+
+<div class="card shadow-sm">
+  <div class="card-body">
+    <form method="POST" action="{{ url_for('booking_add') }}" class="needs-validation" novalidate>
+      <div class="row g-3">
+        <!-- Vehicle -->
+        <div class="col-md-6">
+          <label for="vehicle_id" class="form-label">Vehicle</label>
+          <select class="form-select" id="vehicle_id" name="vehicle_id" required>
+            <option value="" disabled selected>-- Select vehicle --</option>
+            {% for v in vehicles %}
+              <option value="{{ v.id }}"{% if v.status == 'maintenance' %} disabled{% endif %}>
+                {{ v.registration_number }} ({{ v.make }} {{ v.model }}){% if v.status == 'maintenance' %} – MAINTENANCE{% elif v.status == 'in_use' %} – IN USE{% endif %}
+              </option>
+            {% endfor %}
+          </select>
+          <div class="invalid-feedback">Please select a vehicle.</div>
+        </div>
+
+        <!-- Driver (optional) -->
+        <div class="col-md-6">
+          <label for="driver_id" class="form-label">Assigned Driver <small class="text-muted">– optional</small></label>
+          <select class="form-select" id="driver_id" name="driver_id">
+            <option value="">-- No driver assigned --</option>
+            {% for d in drivers %}
+              <option value="{{ d.id }}">{{ d.full_name }}</option>
+            {% endfor %}
+          </select>
+        </div>
+
+        <!-- Dates -->
+        <div class="col-md-6">
+          <label for="start_datetime_planned" class="form-label">Planned Start</label>
+          <input type="datetime-local" class="form-control" id="start_datetime_planned"
+                 name="start_datetime_planned" required>
+          <div class="invalid-feedback">Start date/time is required.</div>
+        </div>
+        <div class="col-md-6">
+          <label for="end_datetime_planned" class="form-label">Planned End</label>
+          <input type="datetime-local" class="form-control" id="end_datetime_planned"
+                 name="end_datetime_planned" required>
+          <div class="invalid-feedback">End date/time is required and must be after start.</div>
+        </div>
+
+        <!-- Route -->
+        <div class="col-md-6">
+          <label for="route_from" class="form-label">Route From</label>
+          <input type="text" class="form-control" id="route_from"
+                 name="route_from" required placeholder="e.g. Kilifi Office">
+          <div class="invalid-feedback">Route From is required.</div>
+        </div>
+        <div class="col-md-6">
+          <label for="route_to" class="form-label">Route To</label>
+          <input type="text" class="form-control" id="route_to"
+                 name="route_to" required placeholder="e.g. Mombasa">
+          <div class="invalid-feedback">Route To is required.</div>
+        </div>
+
+        <!-- Purpose -->
+        <div class="col-12">
+          <label for="purpose" class="form-label">Purpose</label>
+          <textarea class="form-control" id="purpose" name="purpose"
+                    rows="2" required placeholder="Describe the purpose of the trip"></textarea>
+          <div class="invalid-feedback">Purpose is required.</div>
+        </div>
+
+        <!-- Codes -->
+        <div class="col-md-6">
+          <label for="activity_code" class="form-label">Activity Code</label>
+          <input type="text" class="form-control" id="activity_code"
+                 name="activity_code" placeholder="Optional">
+        </div>
+        <div class="col-md-6">
+          <label for="project_code" class="form-label">Project Code</label>
+          <input type="text" class="form-control" id="project_code"
+                 name="project_code" placeholder="Optional">
+        </div>
+      </div>
+
+      <div class="mt-4">
+        <button type="submit" class="btn btn-success">
+          <i class="bi bi-send"></i> Submit Booking Request
+        </button>
+        <a href="{{ url_for('booking_list') }}" class="btn btn-outline-secondary ms-2">Cancel</a>
+      </div>
+    </form>
+  </div>
+</div>
+{% endblock %}

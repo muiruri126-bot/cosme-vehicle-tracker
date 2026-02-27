@@ -1,0 +1,168 @@
+{% extends "base.html" %}
+{% block title %}Booking #{{ booking.id }} – COSME Vehicle Tracker{% endblock %}
+{% block content %}
+<h2 class="mb-3">
+  Booking #{{ booking.id }}
+  {% if booking.status == 'pending' %}
+    <span class="badge bg-warning text-dark">Pending</span>
+  {% elif booking.status == 'approved' %}
+    <span class="badge bg-success">Approved</span>
+  {% elif booking.status == 'completed' %}
+    <span class="badge bg-info">Completed</span>
+  {% else %}
+    <span class="badge bg-secondary">{{ booking.status | title }}</span>
+  {% endif %}
+</h2>
+
+<div class="card shadow-sm mb-4">
+  <div class="card-body">
+    <div class="row">
+      <div class="col-md-6">
+        <dl>
+          <dt>Vehicle</dt>
+          <dd>{{ booking.vehicle.registration_number }}
+              ({{ booking.vehicle.make }} {{ booking.vehicle.model }})</dd>
+
+          <dt>Requester</dt>
+          <dd>{{ booking.requester_name }}</dd>
+
+          <dt>Driver</dt>
+          <dd>{{ booking.driver.full_name if booking.driver else '– Not assigned –' }}</dd>
+
+          <dt>Route</dt>
+          <dd>{{ booking.route_from }} &rarr; {{ booking.route_to }}</dd>
+
+          <dt>Purpose</dt>
+          <dd>{{ booking.purpose }}</dd>
+        </dl>
+      </div>
+      <div class="col-md-6">
+        <dl>
+          <dt>Planned Start</dt>
+          <dd>{{ booking.start_datetime_planned.strftime('%d %b %Y %H:%M') }}</dd>
+
+          <dt>Planned End</dt>
+          <dd>{{ booking.end_datetime_planned.strftime('%d %b %Y %H:%M') }}</dd>
+
+          <dt>Activity Code</dt>
+          <dd>{{ booking.activity_code or '–' }}</dd>
+
+          <dt>Project Code</dt>
+          <dd>{{ booking.project_code or '–' }}</dd>
+
+          <dt>Created</dt>
+          <dd>{{ booking.created_at.strftime('%d %b %Y %H:%M') }}</dd>
+        </dl>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ── Action buttons ───────────────────────────────────────────────── -->
+<div class="mb-4 d-flex flex-wrap gap-2">
+  {% if booking.status == 'pending' and current_user.is_admin %}
+    <form method="POST" action="{{ url_for('booking_approve', booking_id=booking.id) }}"
+          class="d-inline">
+      <button type="submit" class="btn btn-success">
+        <i class="bi bi-check-circle"></i> Approve
+      </button>
+    </form>
+  {% endif %}
+
+  {% if booking.status in ('pending', 'approved') %}
+    <form method="POST" action="{{ url_for('booking_cancel', booking_id=booking.id) }}"
+          class="d-inline">
+      <button type="submit" class="btn btn-outline-danger"
+              onclick="return confirm('Cancel this booking?')">
+        <i class="bi bi-x-circle"></i> Cancel
+      </button>
+    </form>
+  {% endif %}
+
+  {% if booking.status == 'approved' and not booking.trip %}
+    <a href="{{ url_for('trip_start', booking_id=booking.id) }}" class="btn btn-primary">
+      <i class="bi bi-play-circle"></i> Start Trip
+    </a>
+  {% endif %}
+
+  {% if booking.trip and not booking.trip.end_actual_datetime %}
+    <a href="{{ url_for('trip_end', booking_id=booking.id) }}" class="btn btn-warning">
+      <i class="bi bi-stop-circle"></i> End Trip
+    </a>
+  {% endif %}
+</div>
+
+<!-- ── Driver assignment (admin only) ───────────────────────────────── -->
+{% if current_user.is_admin and booking.status in ('pending', 'approved') %}
+<div class="card shadow-sm mb-4">
+  <div class="card-header"><strong><i class="bi bi-person-badge"></i> Assign / Change Driver</strong></div>
+  <div class="card-body">
+    <form method="POST" action="{{ url_for('booking_assign_driver', booking_id=booking.id) }}"
+          class="row g-2 align-items-end">
+      <div class="col-md-6">
+        <select class="form-select" name="driver_id">
+          <option value="">-- No driver --</option>
+          {% for d in drivers %}
+            <option value="{{ d.id }}" {{ 'selected' if booking.driver_id == d.id }}>
+              {{ d.full_name }}
+            </option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="col-md-3">
+        <button type="submit" class="btn btn-outline-primary">
+          <i class="bi bi-person-check"></i> Assign
+        </button>
+      </div>
+    </form>
+  </div>
+</div>
+{% endif %}
+
+<!-- ── Trip details (if any) ────────────────────────────────────────── -->
+{% if booking.trip %}
+<div class="card shadow-sm">
+  <div class="card-header"><strong>Trip Details</strong></div>
+  <div class="card-body">
+    <div class="row">
+      <div class="col-md-6">
+        <dl>
+          <dt>Actual Start</dt>
+          <dd>{{ booking.trip.start_actual_datetime.strftime('%d %b %Y %H:%M') if booking.trip.start_actual_datetime else '–' }}</dd>
+
+          <dt>Actual End</dt>
+          <dd>{{ booking.trip.end_actual_datetime.strftime('%d %b %Y %H:%M') if booking.trip.end_actual_datetime else '–' }}</dd>
+        </dl>
+      </div>
+      <div class="col-md-6">
+        <dl>
+          <dt>Odometer Start</dt>
+          <dd>{{ booking.trip.odometer_start if booking.trip.odometer_start is not none else '–' }} km</dd>
+
+          <dt>Odometer End</dt>
+          <dd>{{ booking.trip.odometer_end if booking.trip.odometer_end is not none else '–' }} km</dd>
+
+          <dt>Distance</dt>
+          <dd>{{ booking.trip.distance if booking.trip.distance is not none else '–' }} km</dd>
+
+          <dt>Fuel Used</dt>
+          <dd>{{ booking.trip.fuel_used if booking.trip.fuel_used is not none else '–' }} litres</dd>
+
+          <dt>Fuel Cost</dt>
+          <dd>{{ booking.trip.fuel_cost if booking.trip.fuel_cost is not none else '–' }}</dd>
+
+          <dt>Remarks</dt>
+          <dd>{{ booking.trip.remarks or '–' }}</dd>
+        </dl>
+      </div>
+    </div>
+  </div>
+</div>
+{% endif %}
+
+<div class="mt-3">
+  <a href="{{ url_for('booking_list') }}" class="btn btn-outline-secondary">
+    <i class="bi bi-arrow-left"></i> Back to Bookings
+  </a>
+</div>
+{% endblock %}

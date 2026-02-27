@@ -1,0 +1,109 @@
+{% extends "base.html" %}
+{% block title %}Vehicle Trip Report – COSME Vehicle Tracker{% endblock %}
+{% block content %}
+<h2 class="mb-3"><i class="bi bi-bar-chart-line"></i> Vehicle Trip Report</h2>
+
+<!-- ── Filter form ──────────────────────────────────────────────────── -->
+<div class="card shadow-sm mb-4">
+  <div class="card-body">
+    <form method="GET" action="{{ url_for('vehicle_report') }}">
+      <div class="row g-3 align-items-end">
+        <div class="col-md-4">
+          <label for="vehicle_id" class="form-label">Vehicle</label>
+          <select class="form-select" id="vehicle_id" name="vehicle_id" required>
+            <option value="" disabled {{ 'selected' if not selected_vehicle_id }}>-- Select vehicle --</option>
+            {% for v in vehicles %}
+              <option value="{{ v.id }}" {{ 'selected' if selected_vehicle_id == v.id }}>
+                {{ v.registration_number }} ({{ v.make }} {{ v.model }})
+              </option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="col-md-3">
+          <label for="date_from" class="form-label">From Date</label>
+          <input type="date" class="form-control" id="date_from"
+                 name="date_from" required value="{{ date_from }}">
+        </div>
+        <div class="col-md-3">
+          <label for="date_to" class="form-label">To Date</label>
+          <input type="date" class="form-control" id="date_to"
+                 name="date_to" required value="{{ date_to }}">
+        </div>
+        <div class="col-md-2">
+          <button type="submit" class="btn btn-primary w-100">
+            <i class="bi bi-search"></i> Filter
+          </button>
+        </div>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- ── Results ───────────────────────────────────────────────────────── -->
+{% if selected_vehicle_id and date_from and date_to %}
+  {% if trips %}
+  <!-- Export button -->
+  <div class="mb-3">
+    <a href="{{ url_for('vehicle_report_export', vehicle_id=selected_vehicle_id, date_from=date_from, date_to=date_to) }}"
+       class="btn btn-success">
+      <i class="bi bi-file-earmark-excel"></i> Export to Excel
+    </a>
+  </div>
+
+  <div class="table-responsive">
+    <table class="table table-striped table-hover align-middle">
+      <thead class="table-light">
+        <tr>
+          <th>Trip&nbsp;#</th>
+          <th>Booking&nbsp;#</th>
+          <th>Requester</th>
+          <th>Driver</th>
+          <th>Route</th>
+          <th>Start</th>
+          <th>End</th>
+          <th>Odo Start</th>
+          <th>Odo End</th>
+          <th>Distance</th>
+          <th>Fuel</th>
+          <th>Fuel Cost</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for t in trips %}
+        <tr>
+          <td>{{ t.id }}</td>
+          <td>
+            <a href="{{ url_for('booking_detail', booking_id=t.booking.id) }}">
+              #{{ t.booking.id }}
+            </a>
+          </td>
+          <td>{{ t.booking.requester_name }}</td>
+          <td>{{ t.booking.driver.full_name if t.booking.driver else '–' }}</td>
+          <td>{{ t.booking.route_from }} &rarr; {{ t.booking.route_to }}</td>
+          <td>{{ t.start_actual_datetime.strftime('%d %b %Y %H:%M') }}</td>
+          <td>{{ t.end_actual_datetime.strftime('%d %b %Y %H:%M') }}</td>
+          <td>{{ t.odometer_start }}</td>
+          <td>{{ t.odometer_end }}</td>
+          <td>{{ t.distance }} km</td>
+          <td>{{ t.fuel_used if t.fuel_used is not none else '–' }}</td>
+          <td>{{ t.fuel_cost if t.fuel_cost is not none else '–' }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+      <tfoot class="table-dark">
+        <tr>
+          <td colspan="9" class="text-end"><strong>Totals</strong></td>
+          <td><strong>{{ total_distance }} km</strong></td>
+          <td></td>
+          <td><strong>{{ "%.2f"|format(total_fuel_cost) if total_fuel_cost else '–' }}</strong></td>
+        </tr>
+      </tfoot>
+    </table>
+  </div>
+  {% else %}
+  <div class="alert alert-info">
+    No completed trips found for the selected vehicle and date range.
+  </div>
+  {% endif %}
+{% endif %}
+{% endblock %}

@@ -1,0 +1,47 @@
+{% extends "base.html" %}
+{% block title %}Edit Vehicle – COSME Vehicle Tracker{% endblock %}
+{% block content %}
+<h2 class="mb-3">Edit Vehicle – {{ vehicle.registration_number }}</h2>
+
+<div class="card shadow-sm">
+  <div class="card-body">
+    <form method="POST" action="{{ url_for('vehicle_edit', vehicle_id=vehicle.id) }}" class="needs-validation" novalidate>
+      <div class="row g-3">
+        <div class="col-md-4">
+          <label for="registration_number" class="form-label">Registration Number</label>
+          <input type="text" class="form-control" id="registration_number"
+                 name="registration_number" required minlength="3"
+                 value="{{ vehicle.registration_number }}">
+          <div class="invalid-feedback">Registration number is required (at least 3 characters).</div>
+        </div>
+        <div class="col-md-4">
+          <label for="make" class="form-label">Make</label>
+          <input type="text" class="form-control" id="make"
+                 name="make" required value="{{ vehicle.make }}">
+          <div class="invalid-feedback">Vehicle make is required.</div>
+        </div>
+        <div class="col-md-4">
+          <label for="model" class="form-label">Model</label>
+          <input type="text" class="form-control" id="model"
+                 name="model" required value="{{ vehicle.model }}">
+          <div class="invalid-feedback">Vehicle model is required.</div>
+        </div>
+        <div class="col-md-4">
+          <label for="status" class="form-label">Status</label>
+          <select class="form-select" id="status" name="status">
+            <option value="available" {{ 'selected' if vehicle.status == 'available' }}>Available</option>
+            <option value="in_use" {{ 'selected' if vehicle.status == 'in_use' }}>In Use</option>
+            <option value="maintenance" {{ 'selected' if vehicle.status == 'maintenance' }}>Maintenance</option>
+          </select>
+        </div>
+      </div>
+      <div class="mt-4">
+        <button type="submit" class="btn btn-primary">
+          <i class="bi bi-check-lg"></i> Update
+        </button>
+        <a href="{{ url_for('vehicle_list') }}" class="btn btn-outline-secondary ms-2">Cancel</a>
+      </div>
+    </form>
+  </div>
+</div>
+{% endblock %}

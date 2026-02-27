@@ -1,0 +1,42 @@
+{% extends "base.html" %}
+{% block title %}Start Trip – Booking #{{ booking.id }}{% endblock %}
+{% block content %}
+<h2 class="mb-3">Start Trip – Booking #{{ booking.id }}</h2>
+
+<div class="card shadow-sm mb-3">
+  <div class="card-body">
+    <p><strong>Vehicle:</strong> {{ booking.vehicle.registration_number }}
+       ({{ booking.vehicle.make }} {{ booking.vehicle.model }})</p>
+    <p><strong>Route:</strong> {{ booking.route_from }} → {{ booking.route_to }}</p>
+    <p><strong>Requester:</strong> {{ booking.requester_name }}</p>
+  </div>
+</div>
+
+<div class="card shadow-sm">
+  <div class="card-body">
+    <form method="POST" action="{{ url_for('trip_start', booking_id=booking.id) }}" class="needs-validation" novalidate>
+      <div class="row g-3">
+        <div class="col-md-6">
+          <label for="start_actual_datetime" class="form-label">Actual Start Date/Time</label>
+          <input type="datetime-local" class="form-control" id="start_actual_datetime"
+                 name="start_actual_datetime" required>
+          <div class="invalid-feedback">Start date/time is required.</div>
+        </div>
+        <div class="col-md-6">
+          <label for="odometer_start" class="form-label">Odometer Reading (km)</label>
+          <input type="number" class="form-control" id="odometer_start"
+                 name="odometer_start" required min="0" placeholder="e.g. 45230">
+          <div class="invalid-feedback">A valid odometer reading (0 or above) is required.</div>
+        </div>
+      </div>
+      <div class="mt-4">
+        <button type="submit" class="btn btn-primary">
+          <i class="bi bi-play-circle"></i> Start Trip
+        </button>
+        <a href="{{ url_for('booking_detail', booking_id=booking.id) }}"
+           class="btn btn-outline-secondary ms-2">Cancel</a>
+      </div>
+    </form>
+  </div>
+</div>
+{% endblock %}

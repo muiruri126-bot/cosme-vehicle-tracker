@@ -1,0 +1,45 @@
+{% extends "base.html" %}
+{% block title %}Add Vehicle – COSME Vehicle Tracker{% endblock %}
+{% block content %}
+<h2 class="mb-3">Add Vehicle</h2>
+
+<div class="card shadow-sm">
+  <div class="card-body">
+    <form method="POST" action="{{ url_for('vehicle_add') }}" class="needs-validation" novalidate>
+      <div class="row g-3">
+        <div class="col-md-4">
+          <label for="registration_number" class="form-label">Registration Number</label>
+          <input type="text" class="form-control" id="registration_number"
+                 name="registration_number" required minlength="3" placeholder="e.g. KDG 123A">
+          <div class="invalid-feedback">Registration number is required (at least 3 characters).</div>
+        </div>
+        <div class="col-md-4">
+          <label for="make" class="form-label">Make</label>
+          <input type="text" class="form-control" id="make"
+                 name="make" required placeholder="e.g. Toyota">
+          <div class="invalid-feedback">Vehicle make is required.</div>
+        </div>
+        <div class="col-md-4">
+          <label for="model" class="form-label">Model</label>
+          <input type="text" class="form-control" id="model"
+                 name="model" required placeholder="e.g. Land Cruiser">
+          <div class="invalid-feedback">Vehicle model is required.</div>
+        </div>
+        <div class="col-md-4">
+          <label for="status" class="form-label">Status</label>
+          <select class="form-select" id="status" name="status">
+            <option value="available" selected>Available</option>
+            <option value="maintenance">Maintenance</option>
+          </select>
+        </div>
+      </div>
+      <div class="mt-4">
+        <button type="submit" class="btn btn-primary">
+          <i class="bi bi-check-lg"></i> Save Vehicle
+        </button>
+        <a href="{{ url_for('vehicle_list') }}" class="btn btn-outline-secondary ms-2">Cancel</a>
+      </div>
+    </form>
+  </div>
+</div>
+{% endblock %}
