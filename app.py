@@ -51,6 +51,7 @@ from openpyxl import Workbook
 from openpyxl.styles import Alignment, Font, PatternFill
 
 from models import (
+    AuditLog,
     Booking,
     MaintenanceRecord,
     Trip,
@@ -136,6 +137,23 @@ def role_required(*roles):
         return decorated_function
 
     return decorator
+
+
+# ── Audit-log helper ─────────────────────────────────────────────────────────
+
+
+def log_action(action, entity_type, entity_id=None, details=None):
+    """Record an audit-log entry for the current user."""
+    entry = AuditLog(
+        user_id=current_user.id if current_user.is_authenticated else None,
+        username=current_user.username if current_user.is_authenticated else "system",
+        action=action,
+        entity_type=entity_type,
+        entity_id=entity_id,
+        details=details,
+    )
+    db.session.add(entry)
+    db.session.commit()
 
 
 # ── Email helper ─────────────────────────────────────────────────────────────
@@ -322,9 +340,33 @@ def user_edit(user_id):
         user.role = role
         user.is_active_user = is_active
         db.session.commit()
+        log_action("edit", "User", user.id, f"Updated user '{user.username}': name={full_name}, email={email}, role={role}, active={is_active}")
         flash(f"User {user.username} updated.", "success")
         return redirect(url_for("user_list"))
     return render_template("auth/user_edit.html", user=user)
+
+
+@app.route("/users/<int:user_id>/delete", methods=["POST"])
+@role_required("admin")
+def user_delete(user_id):
+    user = User.query.get_or_404(user_id)
+    if user.id == current_user.id:
+        flash("You cannot delete your own account.", "danger")
+        return redirect(url_for("user_list"))
+    # Remove associated bookings & trips
+    for booking in user.bookings_requested:
+        if booking.trip:
+            db.session.delete(booking.trip)
+        db.session.delete(booking)
+    # Unassign from bookings where user was driver
+    for booking in user.bookings_driven:
+        booking.driver_id = None
+    username_deleted = user.username
+    db.session.delete(user)
+    db.session.commit()
+    log_action("delete", "User", user_id, f"Deleted user '{username_deleted}' and associated records")
+    flash(f"User '{username_deleted}' and their associated records have been deleted.", "success")
+    return redirect(url_for("user_list"))
 
 
 # ╔═══════════════════════════════════════════════════════════════════════════╗
@@ -403,6 +445,7 @@ def vehicle_add():
         )
         db.session.add(v)
         db.session.commit()
+        log_action("create", "Vehicle", v.id, f"Registered vehicle '{reg}' ({make} {model})")
         flash("Vehicle registered successfully.", "success")
         return redirect(url_for("vehicle_list"))
     return render_template("vehicles/add.html")
@@ -448,9 +491,29 @@ def vehicle_edit(vehicle_id):
         vehicle.model = model
         vehicle.status = status
         db.session.commit()
+        log_action("edit", "Vehicle", vehicle.id, f"Updated vehicle '{reg}': make={make}, model={model}, status={status}")
         flash("Vehicle updated.", "success")
         return redirect(url_for("vehicle_list"))
     return render_template("vehicles/edit.html", vehicle=vehicle)
+
+
+@app.route("/vehicles/<int:vehicle_id>/delete", methods=["POST"])
+@role_required("admin")
+def vehicle_delete(vehicle_id):
+    vehicle = Vehicle.query.get_or_404(vehicle_id)
+    # Delete associated maintenance records
+    for rec in vehicle.maintenance_records:
+        db.session.delete(rec)
+    # Delete associated bookings and their trips
+    for booking in vehicle.bookings:
+        if booking.trip:
+            db.session.delete(booking.trip)
+        db.session.delete(booking)
+    db.session.delete(vehicle)
+    db.session.commit()
+    log_action("delete", "Vehicle", vehicle_id, f"Deleted vehicle '{vehicle.registration_number}' and all associated records")
+    flash(f"Vehicle '{vehicle.registration_number}' and all associated records have been deleted.", "success")
+    return redirect(url_for("vehicle_list"))
 
 
 # ╔═══════════════════════════════════════════════════════════════════════════╗
@@ -573,6 +636,7 @@ def booking_add():
         )
         db.session.add(booking)
         db.session.commit()
+        log_action("create", "Booking", booking.id, f"Created booking: vehicle={booking.vehicle.registration_number}, route={route_from}→{route_to}")
         flash("Booking request created (status: pending).", "success")
 
         # ── Notify all admins about the new booking request ────────────
@@ -657,6 +721,7 @@ def booking_approve(booking_id):
 
     booking.status = "approved"
     db.session.commit()
+    log_action("approve", "Booking", booking.id, f"Approved booking #{booking.id} for vehicle {booking.vehicle.registration_number}")
     flash("Booking approved.", "success")
 
     # ── Send notification email ───────────────────────────────────────
@@ -703,6 +768,7 @@ def booking_assign_driver(booking_id):
     db.session.commit()
 
     if booking.driver:
+        log_action("assign", "Booking", booking.id, f"Assigned driver '{booking.driver.full_name}' to booking #{booking.id}")
         flash(f"Driver assigned: {booking.driver.full_name}.", "success")
         # Notify the driver
         send_notification(
@@ -731,6 +797,7 @@ def booking_cancel(booking_id):
     if booking.status in ("pending", "approved"):
         booking.status = "cancelled"
         db.session.commit()
+        log_action("cancel", "Booking", booking.id, f"Cancelled booking #{booking.id} for vehicle {booking.vehicle.registration_number}")
         flash("Booking cancelled.", "info")
 
         # ── Notify the requester that their booking was cancelled ─────
@@ -769,6 +836,21 @@ def booking_cancel(booking_id):
     else:
         flash("This booking cannot be cancelled.", "warning")
     return redirect(url_for("booking_detail", booking_id=booking.id))
+
+
+@app.route("/bookings/<int:booking_id>/delete", methods=["POST"])
+@role_required("admin")
+def booking_delete(booking_id):
+    booking = Booking.query.get_or_404(booking_id)
+    vehicle_reg = booking.vehicle.registration_number
+    # Delete associated trip first
+    if booking.trip:
+        db.session.delete(booking.trip)
+    db.session.delete(booking)
+    db.session.commit()
+    log_action("delete", "Booking", booking_id, f"Deleted booking #{booking_id} ({vehicle_reg})")
+    flash(f"Booking #{booking_id} ({vehicle_reg}) has been deleted.", "success")
+    return redirect(url_for("booking_list"))
 
 
 # ╔═══════════════════════════════════════════════════════════════════════════╗
@@ -830,6 +912,7 @@ def trip_start(booking_id):
         booking.vehicle.status = "in_use"
         db.session.add(trip)
         db.session.commit()
+        log_action("create", "Trip", trip.id, f"Started trip for booking #{booking.id}, odometer={odometer_start}")
         flash("Trip started – vehicle marked as in use.", "success")
         return redirect(url_for("booking_detail", booking_id=booking.id))
 
@@ -918,6 +1001,7 @@ def trip_end(booking_id):
         booking.status = "completed"
         booking.vehicle.status = "available"
         db.session.commit()
+        log_action("complete", "Trip", trip.id, f"Ended trip for booking #{booking.id}, distance={trip.distance} km")
         flash(
             f"Trip ended – distance: {trip.distance} km. Booking marked as completed.",
             "success",
@@ -1011,6 +1095,7 @@ def maintenance_add():
             rec.vehicle.status = "maintenance"
             db.session.commit()
 
+        log_action("create", "MaintenanceRecord", rec.id, f"Created maintenance ({mtype}) for vehicle {rec.vehicle.registration_number}")
         flash("Maintenance record created.", "success")
         return redirect(url_for("maintenance_list"))
     return render_template("maintenance/add.html", vehicles=vehicles)
@@ -1027,6 +1112,7 @@ def maintenance_complete(rec_id):
     # Set vehicle back to available
     rec.vehicle.status = "available"
     db.session.commit()
+    log_action("complete", "MaintenanceRecord", rec.id, f"Completed maintenance for vehicle {rec.vehicle.registration_number}")
     flash("Maintenance marked as completed. Vehicle is now available.", "success")
     return redirect(url_for("maintenance_list"))
 
@@ -1039,7 +1125,20 @@ def maintenance_cancel(rec_id):
     if rec.vehicle.status == "maintenance":
         rec.vehicle.status = "available"
     db.session.commit()
+    log_action("cancel", "MaintenanceRecord", rec.id, f"Cancelled maintenance for vehicle {rec.vehicle.registration_number}")
     flash("Maintenance record cancelled.", "info")
+    return redirect(url_for("maintenance_list"))
+
+
+@app.route("/maintenance/<int:rec_id>/delete", methods=["POST"])
+@role_required("admin")
+def maintenance_delete(rec_id):
+    rec = MaintenanceRecord.query.get_or_404(rec_id)
+    vehicle_reg = rec.vehicle.registration_number
+    db.session.delete(rec)
+    db.session.commit()
+    log_action("delete", "MaintenanceRecord", rec_id, f"Deleted maintenance record for vehicle '{vehicle_reg}'")
+    flash(f"Maintenance record for '{vehicle_reg}' has been deleted.", "success")
     return redirect(url_for("maintenance_list"))
 
 
@@ -1253,6 +1352,33 @@ def api_bookings():
             }
         )
     return jsonify(events)
+
+
+# ╔═══════════════════════════════════════════════════════════════════════════╗
+# ║  AUDIT LOG                                                              ║
+# ╚═══════════════════════════════════════════════════════════════════════════╝
+
+
+@app.route("/audit-log")
+@role_required("admin")
+def audit_log():
+    """Show the audit trail of all create / edit / delete actions."""
+    entity_filter = request.args.get("entity", "")
+    action_filter = request.args.get("action", "")
+
+    query = AuditLog.query
+    if entity_filter:
+        query = query.filter_by(entity_type=entity_filter)
+    if action_filter:
+        query = query.filter_by(action=action_filter)
+
+    logs = query.order_by(AuditLog.timestamp.desc()).limit(500).all()
+    return render_template(
+        "audit_log.html",
+        logs=logs,
+        current_entity=entity_filter,
+        current_action=action_filter,
+    )
 
 
 # ── Run ──────────────────────────────────────────────────────────────────────

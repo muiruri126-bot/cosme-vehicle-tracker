@@ -190,6 +190,34 @@ class MaintenanceRecord(db.Model):
 
 
 # ---------------------------------------------------------------------------
+# AuditLog  (tracks who edited/deleted what and when)
+# ---------------------------------------------------------------------------
+class AuditLog(db.Model):
+    __tablename__ = "audit_logs"
+
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=True)
+    username = db.Column(db.String(80), nullable=False)
+    action = db.Column(
+        db.String(20), nullable=False
+    )  # create | edit | delete | approve | cancel | assign | complete
+    entity_type = db.Column(
+        db.String(50), nullable=False
+    )  # User | Vehicle | Booking | Trip | MaintenanceRecord
+    entity_id = db.Column(db.Integer, nullable=True)
+    details = db.Column(db.Text, nullable=True)
+    timestamp = db.Column(
+        db.DateTime, nullable=False, default=lambda: datetime.now(timezone.utc)
+    )
+
+    # Relationship (nullable – the user might have been deleted)
+    user = db.relationship("User", backref="audit_logs", lazy=True)
+
+    def __repr__(self):
+        return f"<AuditLog {self.id} – {self.action} {self.entity_type} #{self.entity_id} by {self.username}>"
+
+
+# ---------------------------------------------------------------------------
 # Helper: Conflict Detection
 # ---------------------------------------------------------------------------
 def check_booking_conflict(vehicle_id, start_dt, end_dt, exclude_booking_id=None):

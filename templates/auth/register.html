@@ -5,6 +5,10 @@
   <div class="col-md-6">
     <div class="card shadow">
       <div class="card-body">
+        <div class="text-center mb-3">
+          <img src="{{ url_for('static', filename='logo.svg') }}" alt="Plan International Kenya"
+               height="50" class="mb-2">
+        </div>
         <h3 class="card-title text-center mb-4">Create Account</h3>
         <form method="POST" action="{{ url_for('register') }}" class="needs-validation" novalidate>
           <div class="row g-3">

@@ -79,6 +79,15 @@
             </button>
           </form>
           {% endif %}
+          {% if current_user.is_admin %}
+          <form method="POST" action="{{ url_for('maintenance_delete', rec_id=r.id) }}"
+                class="d-inline">
+            <button type="submit" class="btn btn-sm btn-danger"
+                    onclick="return confirm('Are you sure you want to permanently delete this maintenance record? This action cannot be undone.')">
+              <i class="bi bi-trash"></i>
+            </button>
+          </form>
+          {% endif %}
         </td>
       </tr>
       {% endfor %}
