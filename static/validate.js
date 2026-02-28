@@ -1,5 +1,5 @@
 /**
- * COSME Vehicle Tracker – Client-side form validation
+ * Vehicle Request Tracker – Client-side form validation
  * Uses Bootstrap 5 validation classes (.is-invalid / .is-valid)
  */
 

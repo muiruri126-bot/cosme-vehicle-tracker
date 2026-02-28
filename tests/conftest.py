@@ -1,5 +1,5 @@
 """
-Shared pytest fixtures for COSME Vehicle Tracker tests.
+Shared pytest fixtures for Vehicle Request Tracker tests.
 Uses an in-memory SQLite database so tests never touch production data.
 """
 

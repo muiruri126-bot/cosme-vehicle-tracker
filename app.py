@@ -381,7 +381,7 @@ def forgot_password():
             db.session.commit()
             reset_url = url_for("reset_password", token=token, _external=True)
             send_notification(
-                subject="COSME Vehicle Tracker – Password Reset",
+                subject="Vehicle Request Tracker – Password Reset",
                 recipients=[user.email],
                 body=(
                     f"Hello {user.full_name},\n\n"
@@ -389,7 +389,7 @@ def forgot_password():
                     f"Click the link below to reset your password (valid for 24 hours):\n"
                     f"{reset_url}\n\n"
                     f"If you did not request this, please ignore this email.\n\n"
-                    f"— COSME Vehicle Tracker"
+                    f"— Vehicle Request Tracker"
                 ),
             )
         return redirect(url_for("login"))
@@ -872,7 +872,7 @@ def booking_add():
         admin_emails = [a.email for a in admins if a.email]
         if admin_emails:
             send_notification(
-                subject=f"New Booking Request #{booking.id} – COSME Vehicle Tracker",
+                subject=f"New Booking Request #{booking.id} – Vehicle Request Tracker",
                 recipients=admin_emails,
                 body=(
                     f"Hello Admin,\n\n"
@@ -885,13 +885,13 @@ def booking_add():
                     f"From: {booking.start_datetime_planned.strftime('%d %b %Y %H:%M')}\n"
                     f"To: {booking.end_datetime_planned.strftime('%d %b %Y %H:%M')}\n\n"
                     f"Please log in to review and approve/reject this request.\n\n"
-                    f"– COSME Vehicle Tracker"
+                    f"– Vehicle Request Tracker"
                 ),
             )
         # ── Confirm to the requester that their request was received ──
         if current_user.email:
             send_notification(
-                subject=f"Booking Request #{booking.id} Received – COSME Vehicle Tracker",
+                subject=f"Booking Request #{booking.id} Received – Vehicle Request Tracker",
                 recipients=[current_user.email],
                 body=(
                     f"Hello {current_user.full_name},\n\n"
@@ -903,7 +903,7 @@ def booking_add():
                     f"To: {booking.end_datetime_planned.strftime('%d %b %Y %H:%M')}\n\n"
                     f"Status: PENDING – awaiting admin approval.\n"
                     f"You will receive another email once your request is approved or cancelled.\n\n"
-                    f"– COSME Vehicle Tracker"
+                    f"– Vehicle Request Tracker"
                 ),
             )
 
@@ -955,7 +955,7 @@ def booking_approve(booking_id):
     # ── Send notification email ───────────────────────────────────────
     if booking.requester and booking.requester.email:
         send_notification(
-            subject=f"Booking #{booking.id} Approved – COSME Vehicle Tracker",
+            subject=f"Booking #{booking.id} Approved – Vehicle Request Tracker",
             recipients=[booking.requester.email],
             body=(
                 f"Hello {booking.requester_name},\n\n"
@@ -964,7 +964,7 @@ def booking_approve(booking_id):
                 f"Route: {booking.route_from} → {booking.route_to}\n"
                 f"From: {booking.start_datetime_planned.strftime('%d %b %Y %H:%M')}\n"
                 f"To: {booking.end_datetime_planned.strftime('%d %b %Y %H:%M')}\n\n"
-                f"– COSME Vehicle Tracker"
+                f"– Vehicle Request Tracker"
             ),
         )
     # Also notify driver if assigned
@@ -979,7 +979,7 @@ def booking_approve(booking_id):
                 f"Route: {booking.route_from} → {booking.route_to}\n"
                 f"From: {booking.start_datetime_planned.strftime('%d %b %Y %H:%M')}\n"
                 f"To: {booking.end_datetime_planned.strftime('%d %b %Y %H:%M')}\n\n"
-                f"– COSME Vehicle Tracker"
+                f"– Vehicle Request Tracker"
             ),
         )
 
@@ -1009,7 +1009,7 @@ def booking_assign_driver(booking_id):
                 f"Route: {booking.route_from} → {booking.route_to}\n"
                 f"From: {booking.start_datetime_planned.strftime('%d %b %Y %H:%M')}\n"
                 f"To: {booking.end_datetime_planned.strftime('%d %b %Y %H:%M')}\n\n"
-                f"– COSME Vehicle Tracker"
+                f"– Vehicle Request Tracker"
             ),
         )
     else:
@@ -1032,7 +1032,7 @@ def booking_cancel(booking_id):
         if booking.requester and booking.requester.email:
             cancelled_by = current_user.full_name
             send_notification(
-                subject=f"Booking #{booking.id} Cancelled – COSME Vehicle Tracker",
+                subject=f"Booking #{booking.id} Cancelled – Vehicle Request Tracker",
                 recipients=[booking.requester.email],
                 body=(
                     f"Hello {booking.requester_name},\n\n"
@@ -1043,13 +1043,13 @@ def booking_cancel(booking_id):
                     f"From: {booking.start_datetime_planned.strftime('%d %b %Y %H:%M')}\n"
                     f"To: {booking.end_datetime_planned.strftime('%d %b %Y %H:%M')}\n\n"
                     f"If you have questions, please contact the admin.\n\n"
-                    f"– COSME Vehicle Tracker"
+                    f"– Vehicle Request Tracker"
                 ),
             )
         # ── Notify assigned driver if any ─────────────────────────────
         if booking.driver and booking.driver.email:
             send_notification(
-                subject=f"Booking #{booking.id} Cancelled – COSME Vehicle Tracker",
+                subject=f"Booking #{booking.id} Cancelled – Vehicle Request Tracker",
                 recipients=[booking.driver.email],
                 body=(
                     f"Hello {booking.driver.full_name},\n\n"
@@ -1058,7 +1058,7 @@ def booking_cancel(booking_id):
                     f"Route: {booking.route_from} → {booking.route_to}\n"
                     f"From: {booking.start_datetime_planned.strftime('%d %b %Y %H:%M')}\n"
                     f"To: {booking.end_datetime_planned.strftime('%d %b %Y %H:%M')}\n\n"
-                    f"– COSME Vehicle Tracker"
+                    f"– Vehicle Request Tracker"
                 ),
             )
     else:

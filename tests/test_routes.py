@@ -1,5 +1,5 @@
 """
-Integration tests for COSME Vehicle Tracker Flask routes.
+Integration tests for Vehicle Request Tracker Flask routes.
 Tests authentication, authorization, CRUD operations, and business rules.
 """
 
