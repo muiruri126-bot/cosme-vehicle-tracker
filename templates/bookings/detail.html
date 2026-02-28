@@ -70,7 +70,7 @@
     </form>
   {% endif %}
 
-  {% if booking.status in ('pending', 'approved') %}
+  {% if booking.status in ('pending', 'approved') and (current_user.is_admin or booking.requester_id == current_user.id) %}
     <form method="POST" action="{{ url_for('booking_cancel', booking_id=booking.id) }}"
           class="d-inline">
       <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">

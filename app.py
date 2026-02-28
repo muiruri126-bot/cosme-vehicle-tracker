@@ -1050,6 +1050,12 @@ def booking_assign_driver(booking_id):
 @login_required
 def booking_cancel(booking_id):
     booking = db.get_or_404(Booking, booking_id)
+
+    # Only the booking owner or an admin can cancel
+    if not current_user.is_admin and booking.requester_id != current_user.id:
+        flash("You can only cancel your own bookings.", "danger")
+        return redirect(url_for("booking_detail", booking_id=booking.id))
+
     if booking.status in ("pending", "approved"):
         booking.status = "cancelled"
         db.session.commit()
