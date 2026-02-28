@@ -83,8 +83,12 @@ app.config["SQLALCHEMY_DATABASE_URI"] = database_url
 app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
 app.config["SECRET_KEY"] = os.environ.get("SECRET_KEY", "cosme-dev-secret-key")
 
-# ── Session timeout (15 minutes of inactivity) ──────────────────────────────
+# ── Session / Cookie config ─────────────────────────────────────────────────
 app.config["PERMANENT_SESSION_LIFETIME"] = timedelta(minutes=15)
+app.config["SESSION_COOKIE_SAMESITE"] = "Lax"
+app.config["SESSION_COOKIE_SECURE"] = os.environ.get("FLASK_ENV") != "development"
+app.config["SESSION_COOKIE_HTTPONLY"] = True
+app.config["WTF_CSRF_TIME_LIMIT"] = None  # CSRF tokens valid for entire session (no expiry)
 
 # ── Mail config (disabled by default – set MAIL_ENABLED=1 env var to turn on)
 app.config["MAIL_ENABLED"] = os.environ.get("MAIL_ENABLED", "0") == "1"
@@ -131,7 +135,11 @@ def check_session_timeout():
             elapsed = (now - last_active).total_seconds()
             if elapsed > 15 * 60:  # 15 minutes
                 logout_user()
+                # Keep csrf_token in session so the login form still works
+                csrf_tok = session.get("csrf_token")
                 session.clear()
+                if csrf_tok:
+                    session["csrf_token"] = csrf_tok
                 flash("Your session has expired due to inactivity. Please log in again.", "warning")
                 return redirect(url_for("login"))
         session["last_active"] = now
