@@ -23,6 +23,7 @@ A default **admin** account is created on first run:
 
 import io
 import os
+import subprocess
 from datetime import datetime, timedelta, timezone
 from functools import wraps
 from urllib.parse import urlsplit
@@ -1434,6 +1435,93 @@ def vehicle_report():
         selected_vehicle_id=selected_vehicle_id,
         date_from=date_from,
         date_to=date_to,
+    )
+
+
+# ── Midline report generation ────────────────────────────────────────────────
+
+
+@app.route("/reports/midline")
+@login_required
+def midline_report():
+    """Show the COSME Midline Report generation page."""
+    workspace = os.path.dirname(basedir)  # parent of trackers/
+    pdf_path = os.path.join(workspace, "COSME_Midline_Report.pdf")
+    pdf_exists = os.path.exists(pdf_path)
+    pdf_modified = None
+    pdf_size = None
+    if pdf_exists:
+        stat = os.stat(pdf_path)
+        pdf_modified = datetime.fromtimestamp(stat.st_mtime).strftime("%d %b %Y %H:%M")
+        size_mb = stat.st_size / (1024 * 1024)
+        pdf_size = f"{size_mb:.1f} MB" if size_mb >= 1 else f"{stat.st_size / 1024:.0f} KB"
+    return render_template(
+        "reports/midline_report.html",
+        pdf_exists=pdf_exists,
+        pdf_modified=pdf_modified,
+        pdf_size=pdf_size,
+    )
+
+
+@app.route("/reports/midline/generate", methods=["POST"])
+@login_required
+def midline_report_generate():
+    """Run generate_midline_report.py to produce the PDF."""
+    workspace = os.path.dirname(basedir)
+    script = os.path.join(workspace, "generate_midline_report.py")
+    if not os.path.exists(script):
+        flash("Report generation script not found.", "danger")
+        return redirect(url_for("midline_report"))
+    try:
+        result = subprocess.run(
+            ["python", script],
+            cwd=workspace,
+            capture_output=True,
+            text=True,
+            timeout=120,
+        )
+        if result.returncode == 0:
+            flash("Midline report generated successfully!", "success")
+        else:
+            err = result.stderr[:500] if result.stderr else "Unknown error"
+            flash(f"Report generation failed: {err}", "danger")
+    except subprocess.TimeoutExpired:
+        flash("Report generation timed out (>120s).", "warning")
+    except Exception as e:
+        flash(f"Error running report script: {e}", "danger")
+    return redirect(url_for("midline_report"))
+
+
+@app.route("/reports/midline/download")
+@login_required
+def midline_report_download():
+    """Download the generated COSME Midline Report PDF."""
+    workspace = os.path.dirname(basedir)
+    pdf_path = os.path.join(workspace, "COSME_Midline_Report.pdf")
+    if not os.path.exists(pdf_path):
+        flash("Report PDF not found. Please generate it first.", "warning")
+        return redirect(url_for("midline_report"))
+    return send_file(
+        pdf_path,
+        mimetype="application/pdf",
+        as_attachment=True,
+        download_name="COSME_Midline_Report.pdf",
+    )
+
+
+@app.route("/reports/midline/view")
+@login_required
+def midline_report_view():
+    """Open the generated COSME Midline Report PDF in the browser."""
+    workspace = os.path.dirname(basedir)
+    pdf_path = os.path.join(workspace, "COSME_Midline_Report.pdf")
+    if not os.path.exists(pdf_path):
+        flash("Report PDF not found. Please generate it first.", "warning")
+        return redirect(url_for("midline_report"))
+    return send_file(
+        pdf_path,
+        mimetype="application/pdf",
+        as_attachment=False,
     )
 
 

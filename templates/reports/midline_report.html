@@ -1,0 +1,163 @@
+{% extends "base.html" %}
+{% block title %}COSME Midline Report – Report Centre{% endblock %}
+{% block content %}
+<div class="d-flex align-items-center mb-4">
+  <a href="{{ url_for('dashboard') }}" class="btn btn-outline-secondary btn-sm me-3">
+    <i class="bi bi-arrow-left"></i> Dashboard
+  </a>
+  <h2 class="mb-0">COSME Midline Report</h2>
+</div>
+
+<div class="row g-4">
+  <!-- ── Left column: Generate & Status ──────────────────────────────── -->
+  <div class="col-lg-8">
+    <div class="card report-centre-card shadow-sm mb-4">
+      <div class="card-header bg-primary text-white">
+        <h5 class="mb-0"><i class="bi bi-gear-wide-connected me-2"></i>Generate Report</h5>
+      </div>
+      <div class="card-body">
+        <p>
+          Click the button below to generate the comprehensive <strong>COSME Midline Analysis</strong> PDF.
+          This includes survey dashboards, KPI cards, comparison charts, logframe summary, and recommendations
+          covering all project datasets (Women COSME, Men COSME, GJJ KAP, Schools, VSLA, Seaweed, Forestry, and more).
+        </p>
+        <form method="POST" action="{{ url_for('midline_report_generate') }}" id="generateForm">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <button type="submit" class="btn btn-success btn-lg" id="generateBtn">
+            <i class="bi bi-file-earmark-pdf me-2"></i> Generate Report
+          </button>
+          <span class="text-muted ms-3" id="generateHint">
+            <i class="bi bi-info-circle"></i> This may take 30–60 seconds.
+          </span>
+        </form>
+      </div>
+    </div>
+
+    <!-- ── Report contents overview ──────────────────────────────────── -->
+    <div class="card shadow-sm">
+      <div class="card-header">
+        <h5 class="mb-0"><i class="bi bi-list-columns-reverse me-2"></i>Report Contents</h5>
+      </div>
+      <div class="card-body p-0">
+        <div class="table-responsive">
+          <table class="table table-striped mb-0">
+            <thead class="table-light">
+              <tr>
+                <th style="width:40px">#</th>
+                <th>Section</th>
+                <th>Details</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr><td>1</td><td>Executive Summary</td><td>Overview, key findings & programme summary</td></tr>
+              <tr><td>2</td><td>Women COSME Survey</td><td>n=345 – knowledge, attitudes, practices comparison</td></tr>
+              <tr><td>3</td><td>Men COSME Survey</td><td>n=267 – awareness, willingness, participation</td></tr>
+              <tr><td>4</td><td>GJJ KAP Women</td><td>n=312 – gender norms, rights awareness, decision-making</td></tr>
+              <tr><td>5</td><td>GJJ KAP Men</td><td>n=289 – unpaid care work, joint decisions</td></tr>
+              <tr><td>6</td><td>Forestry Groups</td><td>28 groups – nurseries, replanting, survival rates</td></tr>
+              <tr><td>7</td><td>Pre/Post Tests</td><td>Training effectiveness – knowledge gain analysis</td></tr>
+              <tr><td>8</td><td>Schools Initiatives</td><td>65 schools – eco-clubs, tree nurseries, waste mgmt</td></tr>
+              <tr><td>9</td><td>Seaweed Farming</td><td>19 groups, 610 women – production & income</td></tr>
+              <tr><td>10</td><td>VSLA Programme</td><td>211 assessments – savings, loan repayment</td></tr>
+              <tr><td>11</td><td>Training Outputs</td><td>Sessions, participants, gender breakdown</td></tr>
+              <tr><td>12</td><td>Logframe Summary</td><td>13 indicators – achievement vs targets</td></tr>
+              <tr><td>13</td><td>Cross-Dataset Synthesis</td><td>Integrated analysis across all datasets</td></tr>
+              <tr><td>14</td><td>Theory of Change</td><td>Evidence mapping & pathway analysis</td></tr>
+              <tr><td>15</td><td>Recommendations</td><td>Strategic recommendations by programme area</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Right column: Status & Download ─────────────────────────────── -->
+  <div class="col-lg-4">
+    <!-- Status card -->
+    <div class="card shadow-sm mb-4 {% if pdf_exists %}border-success{% else %}border-secondary{% endif %}">
+      <div class="card-header {% if pdf_exists %}bg-success text-white{% else %}bg-light{% endif %}">
+        <h5 class="mb-0">
+          <i class="bi bi-{% if pdf_exists %}check-circle-fill{% else %}x-circle{% endif %} me-2"></i>
+          Report Status
+        </h5>
+      </div>
+      <div class="card-body text-center">
+        {% if pdf_exists %}
+          <div class="report-status-icon text-success mb-3">
+            <i class="bi bi-file-earmark-pdf-fill" style="font-size: 4rem;"></i>
+          </div>
+          <h6>COSME_Midline_Report.pdf</h6>
+          <p class="text-muted mb-1">
+            <i class="bi bi-calendar3 me-1"></i> Last generated: <strong>{{ pdf_modified }}</strong>
+          </p>
+          <p class="text-muted mb-3">
+            <i class="bi bi-hdd me-1"></i> File size: <strong>{{ pdf_size }}</strong>
+          </p>
+          <div class="d-grid gap-2">
+            <a href="{{ url_for('midline_report_download') }}" class="btn btn-primary">
+              <i class="bi bi-download me-2"></i> Download PDF
+            </a>
+            <a href="{{ url_for('midline_report_view') }}" class="btn btn-outline-primary" target="_blank">
+              <i class="bi bi-eye me-2"></i> View in Browser
+            </a>
+          </div>
+        {% else %}
+          <div class="report-status-icon text-muted mb-3">
+            <i class="bi bi-file-earmark-x" style="font-size: 4rem;"></i>
+          </div>
+          <p class="text-muted">No report has been generated yet.</p>
+          <p><small>Click <strong>Generate Report</strong> to create the PDF.</small></p>
+        {% endif %}
+      </div>
+    </div>
+
+    <!-- Quick info card -->
+    <div class="card shadow-sm">
+      <div class="card-header bg-light">
+        <h5 class="mb-0"><i class="bi bi-info-circle me-2"></i>Quick Info</h5>
+      </div>
+      <div class="card-body">
+        <ul class="list-unstyled mb-0">
+          <li class="mb-2">
+            <i class="bi bi-people-fill text-primary me-2"></i>
+            <strong>1,213</strong> survey respondents
+          </li>
+          <li class="mb-2">
+            <i class="bi bi-bar-chart-fill text-success me-2"></i>
+            <strong>12/13</strong> logframe indicators exceeded
+          </li>
+          <li class="mb-2">
+            <i class="bi bi-tree-fill text-success me-2"></i>
+            <strong>28</strong> forestry groups monitored
+          </li>
+          <li class="mb-2">
+            <i class="bi bi-mortarboard-fill text-info me-2"></i>
+            <strong>65</strong> schools participating
+          </li>
+          <li class="mb-2">
+            <i class="bi bi-piggy-bank-fill text-warning me-2"></i>
+            <strong>211</strong> VSLA assessments
+          </li>
+          <li>
+            <i class="bi bi-water text-primary me-2"></i>
+            <strong>610</strong> women in seaweed farming
+          </li>
+        </ul>
+      </div>
+    </div>
+  </div>
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.getElementById('generateForm').addEventListener('submit', function () {
+  const btn = document.getElementById('generateBtn');
+  const hint = document.getElementById('generateHint');
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span> Generating…';
+  hint.innerHTML = '<i class="bi bi-hourglass-split"></i> Please wait, building charts and compiling report…';
+});
+</script>
+{% endblock %}

@@ -59,6 +59,28 @@
 
 <!-- ── Upcoming approved bookings ───────────────────────────────────── -->
 <h4>Upcoming Approved Bookings</h4>
+<!-- ── Report Generation ─────────────────────────────────────────── -->
+<div class="card report-gen-card shadow-sm mb-4">
+  <div class="card-body">
+    <div class="row align-items-center">
+      <div class="col-auto">
+        <div class="report-icon-wrap">
+          <i class="bi bi-file-earmark-pdf-fill"></i>
+        </div>
+      </div>
+      <div class="col">
+        <h5 class="mb-1">COSME Midline Report</h5>
+        <p class="text-muted mb-0">Generate or download the comprehensive COSME Midline Analysis PDF report with charts, KPIs, and logframe data.</p>
+      </div>
+      <div class="col-auto">
+        <a href="{{ url_for('midline_report') }}" class="btn btn-primary">
+          <i class="bi bi-arrow-right-circle me-1"></i> Open Report Centre
+        </a>
+      </div>
+    </div>
+  </div>
+</div>
+
 {% if upcoming %}
 <div class="table-responsive">
   <table class="table table-striped table-hover align-middle">
