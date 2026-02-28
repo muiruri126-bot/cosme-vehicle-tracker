@@ -64,6 +64,7 @@
           {% if current_user.is_admin %}
           <form method="POST" action="{{ url_for('booking_delete', booking_id=b.id) }}"
                 class="d-inline">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
             <button type="submit" class="btn btn-sm btn-outline-danger"
                     onclick="return confirm('Are you sure you want to delete Booking #{{ b.id }}? This will also delete the associated trip data. This action cannot be undone.')">
               <i class="bi bi-trash"></i>

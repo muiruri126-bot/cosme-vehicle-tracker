@@ -6,6 +6,7 @@
 <div class="card shadow-sm">
   <div class="card-body">
     <form method="POST" action="{{ url_for('vehicle_add') }}" class="needs-validation" novalidate>
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
       <div class="row g-3">
         <div class="col-md-4">
           <label for="registration_number" class="form-label">Registration Number</label>

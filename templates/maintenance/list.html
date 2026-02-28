@@ -66,6 +66,7 @@
           {% if current_user.is_admin and r.status in ('scheduled', 'in_progress') %}
           <form method="POST" action="{{ url_for('maintenance_complete', rec_id=r.id) }}"
                 class="d-inline">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
             <input type="hidden" name="cost" value="{{ r.cost or '' }}">
             <button type="submit" class="btn btn-sm btn-success"
                     onclick="return confirm('Mark as completed?')">
@@ -74,6 +75,7 @@
           </form>
           <form method="POST" action="{{ url_for('maintenance_cancel', rec_id=r.id) }}"
                 class="d-inline">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
             <button type="submit" class="btn btn-sm btn-outline-danger"
                     onclick="return confirm('Cancel this maintenance?')">
               <i class="bi bi-x-lg"></i>
@@ -83,6 +85,7 @@
           {% if current_user.is_admin %}
           <form method="POST" action="{{ url_for('maintenance_delete', rec_id=r.id) }}"
                 class="d-inline">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
             <button type="submit" class="btn btn-sm btn-danger"
                     onclick="return confirm('Are you sure you want to permanently delete this maintenance record? This action cannot be undone.')">
               <i class="bi bi-trash"></i>

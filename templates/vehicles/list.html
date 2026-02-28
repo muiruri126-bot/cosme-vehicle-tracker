@@ -48,6 +48,7 @@
           </a>
           <form method="POST" action="{{ url_for('vehicle_delete', vehicle_id=v.id) }}"
                 class="d-inline">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
             <button type="submit" class="btn btn-sm btn-outline-danger"
                     onclick="return confirm('Are you sure you want to delete vehicle {{ v.registration_number }}? This will also delete all associated bookings, trips, and maintenance records. This action cannot be undone.')">
               <i class="bi bi-trash"></i> Delete

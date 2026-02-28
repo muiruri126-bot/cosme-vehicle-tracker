@@ -6,6 +6,7 @@
 <div class="card shadow-sm">
   <div class="card-body">
     <form method="POST" action="{{ url_for('booking_add') }}" class="needs-validation" novalidate>
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
       <div class="row g-3">
         <!-- Vehicle -->
         <div class="col-md-6">

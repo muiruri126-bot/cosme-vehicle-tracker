@@ -63,6 +63,7 @@
   {% if booking.status == 'pending' and current_user.is_admin %}
     <form method="POST" action="{{ url_for('booking_approve', booking_id=booking.id) }}"
           class="d-inline">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
       <button type="submit" class="btn btn-success">
         <i class="bi bi-check-circle"></i> Approve
       </button>
@@ -72,6 +73,7 @@
   {% if booking.status in ('pending', 'approved') %}
     <form method="POST" action="{{ url_for('booking_cancel', booking_id=booking.id) }}"
           class="d-inline">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
       <button type="submit" class="btn btn-outline-danger"
               onclick="return confirm('Cancel this booking?')">
         <i class="bi bi-x-circle"></i> Cancel
@@ -99,6 +101,7 @@
   <div class="card-body">
     <form method="POST" action="{{ url_for('booking_assign_driver', booking_id=booking.id) }}"
           class="row g-2 align-items-end">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
       <div class="col-md-6">
         <select class="form-select" name="driver_id">
           <option value="">-- No driver --</option>
@@ -167,6 +170,7 @@
   {% if current_user.is_admin %}
   <form method="POST" action="{{ url_for('booking_delete', booking_id=booking.id) }}"
         class="d-inline">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
     <button type="submit" class="btn btn-danger"
             onclick="return confirm('Are you sure you want to permanently delete Booking #{{ booking.id }}? This will also delete all associated trip data. This action cannot be undone.')">
       <i class="bi bi-trash"></i> Delete Booking

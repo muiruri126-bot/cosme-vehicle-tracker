@@ -6,6 +6,7 @@
 <div class="card shadow-sm">
   <div class="card-body">
     <form method="POST" action="{{ url_for('user_edit', user_id=user.id) }}" class="needs-validation" novalidate>
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
       <div class="row g-3">
         <div class="col-md-6">
           <label for="full_name" class="form-label">Full Name</label>
@@ -53,6 +54,7 @@
   <div class="card-body">
     <p class="text-muted">Set a new temporary password for this user. They will be required to change it on their next login.</p>
     <form method="POST" action="{{ url_for('admin_reset_password', user_id=user.id) }}" class="needs-validation" novalidate>
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
       <div class="row g-3">
         <div class="col-md-6">
           <label for="new_password" class="form-label">New Password</label>
