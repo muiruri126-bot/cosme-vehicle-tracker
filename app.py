@@ -1090,6 +1090,10 @@ def booking_delete(booking_id):
 @login_required
 def trip_start(booking_id):
     """Record the actual start of a trip (for an approved booking)."""
+    if current_user.role not in ("admin", "driver"):
+        flash("Only admins and drivers can start a trip.", "danger")
+        return redirect(url_for("booking_detail", booking_id=booking_id))
+
     booking = db.get_or_404(Booking, booking_id)
 
     if booking.status != "approved":
@@ -1151,6 +1155,10 @@ def trip_start(booking_id):
 @login_required
 def trip_end(booking_id):
     """Record the actual end of a trip and mark the booking as completed."""
+    if current_user.role not in ("admin", "driver"):
+        flash("Only admins and drivers can end a trip.", "danger")
+        return redirect(url_for("booking_detail", booking_id=booking_id))
+
     booking = db.get_or_404(Booking, booking_id)
     trip = booking.trip
 
