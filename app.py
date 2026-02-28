@@ -54,7 +54,7 @@ from flask_login import (
     logout_user,
 )
 from flask_mail import Mail, Message
-from flask_wtf.csrf import CSRFProtect
+from flask_wtf.csrf import CSRFError, CSRFProtect
 from openpyxl import Workbook
 from openpyxl.styles import Alignment, Font, PatternFill
 
@@ -88,11 +88,13 @@ app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
 app.config["SECRET_KEY"] = os.environ.get("SECRET_KEY", "cosme-dev-secret-key")
 
 # ── Session / Cookie config ─────────────────────────────────────────────────
-app.config["PERMANENT_SESSION_LIFETIME"] = timedelta(minutes=15)
+app.config["PERMANENT_SESSION_LIFETIME"] = timedelta(minutes=30)
 app.config["SESSION_COOKIE_SAMESITE"] = "Lax"
-app.config["SESSION_COOKIE_SECURE"] = os.environ.get("FLASK_ENV") != "development"
+# Only require Secure cookies when explicitly running behind HTTPS
+app.config["SESSION_COOKIE_SECURE"] = os.environ.get("SESSION_COOKIE_SECURE", "0") == "1"
 app.config["SESSION_COOKIE_HTTPONLY"] = True
 app.config["WTF_CSRF_TIME_LIMIT"] = None  # CSRF tokens valid for entire session (no expiry)
+app.config["WTF_CSRF_SSL_STRICT"] = False  # Don't require strict Referer checking for HTTPS
 
 # ── Mail config (disabled by default – set MAIL_ENABLED=1 env var to turn on)
 app.config["MAIL_ENABLED"] = os.environ.get("MAIL_ENABLED", "0") == "1"
@@ -121,14 +123,28 @@ login_manager.login_view = "login"
 login_manager.login_message_category = "warning"
 
 
+@app.errorhandler(CSRFError)
+def handle_csrf_error(e):
+    """Gracefully handle CSRF failures – redirect to login instead of a raw 400."""
+    flash("Your session expired or the form token was missing. Please try again.", "warning")
+    # If the user was trying to POST to login, send them back to the login page
+    return redirect(url_for("login"))
+
+
 @login_manager.user_loader
 def load_user(user_id):
     return db.session.get(User, int(user_id))
 
 
 @app.before_request
+def ensure_session():
+    """Make every session permanent so the cookie persists across requests."""
+    session.permanent = True
+
+
+@app.before_request
 def check_session_timeout():
-    """Log out the user if they have been inactive for more than 15 minutes."""
+    """Log out the user if they have been inactive for more than 30 minutes."""
     if current_user.is_authenticated:
         now = datetime.now(timezone.utc)
         last_active = session.get("last_active")
@@ -137,17 +153,12 @@ def check_session_timeout():
             if hasattr(last_active, 'tzinfo') and last_active.tzinfo is None:
                 last_active = last_active.replace(tzinfo=timezone.utc)
             elapsed = (now - last_active).total_seconds()
-            if elapsed > 15 * 60:  # 15 minutes
+            if elapsed > 30 * 60:  # 30 minutes
                 logout_user()
-                # Keep csrf_token in session so the login form still works
-                csrf_tok = session.get("csrf_token")
                 session.clear()
-                if csrf_tok:
-                    session["csrf_token"] = csrf_tok
                 flash("Your session has expired due to inactivity. Please log in again.", "warning")
                 return redirect(url_for("login"))
         session["last_active"] = now
-        session.permanent = True
 
 
 @app.before_request
