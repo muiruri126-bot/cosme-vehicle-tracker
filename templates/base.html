@@ -25,6 +25,24 @@
 </head>
 <body>
 
+<!-- ─── Splash Screen (PWA launch) ──────────────────────────────────── -->
+<div id="splash-screen">
+  <div class="splash-content">
+    <div class="splash-logo-ring">
+      <img src="{{ url_for('static', filename='logo.svg') }}" alt="Plan International" class="splash-logo">
+    </div>
+    <h1 class="splash-title">Vehicle Request Tracker</h1>
+    <p class="splash-tagline">Plan International Kenya &bull; COSME Project</p>
+    <div class="splash-loader">
+      <div class="splash-loader-bar"></div>
+    </div>
+    <p class="splash-loading-text">Loading&hellip;</p>
+  </div>
+</div>
+
+<!-- ─── Page Progress Bar ──────────────────────────────────────────── -->
+<div id="page-progress" class="page-progress-bar"></div>
+
 <!-- ─── Navbar ──────────────────────────────────────────────────────── -->
 <nav class="navbar navbar-expand-lg navbar-dark cosme-navbar shadow-sm sticky-top">
   <div class="container">
@@ -300,6 +318,65 @@ window.addEventListener('appinstalled', function () {
   var banner = document.getElementById('pwa-install-banner');
   if (banner) banner.remove();
 });
+
+/* ── Splash Screen Logic ───────────────────────────────────── */
+(function() {
+  var splash = document.getElementById('splash-screen');
+  if (!splash) return;
+
+  // Only show splash if launched as installed PWA or first visit of session
+  var isPWA = window.matchMedia('(display-mode: standalone)').matches ||
+              window.navigator.standalone === true;
+  var splashShown = sessionStorage.getItem('vrt_splash_shown');
+
+  if (!isPWA && splashShown) {
+    splash.remove();
+    document.body.classList.add('app-loaded');
+    return;
+  }
+
+  sessionStorage.setItem('vrt_splash_shown', '1');
+  document.body.style.overflow = 'hidden';
+
+  // Dismiss splash when page fully loaded (min 2s for animation)
+  var minDelay = isPWA ? 2500 : 1800;
+  var startTime = Date.now();
+
+  function dismissSplash() {
+    var elapsed = Date.now() - startTime;
+    var remaining = Math.max(0, minDelay - elapsed);
+    setTimeout(function() {
+      splash.classList.add('splash-fade-out');
+      setTimeout(function() {
+        splash.remove();
+        document.body.style.overflow = '';
+        document.body.classList.add('app-loaded');
+      }, 600);
+    }, remaining);
+  }
+
+  if (document.readyState === 'complete') {
+    dismissSplash();
+  } else {
+    window.addEventListener('load', dismissSplash);
+  }
+})();
+
+/* ── Page Progress Bar on Navigation ───────────────────────── */
+(function() {
+  var bar = document.getElementById('page-progress');
+  document.addEventListener('click', function(e) {
+    var link = e.target.closest('a[href]');
+    if (!link) return;
+    var href = link.getAttribute('href');
+    if (!href || href.startsWith('#') || href.startsWith('javascript') ||
+        link.target === '_blank' || e.ctrlKey || e.metaKey) return;
+    bar.classList.add('active');
+  });
+  window.addEventListener('pageshow', function() {
+    bar.classList.remove('active');
+  });
+})();
 </script>
 </body>
 </html>
