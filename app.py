@@ -227,6 +227,25 @@ with app.app_context():
 
 
 # ╔═══════════════════════════════════════════════════════════════════════════╗
+# ║  PWA  –  Service Worker & Offline Page                                  ║
+# ╚═══════════════════════════════════════════════════════════════════════════╝
+
+
+@app.route("/sw.js")
+def service_worker():
+    """Serve the service worker from the root scope."""
+    return send_file(
+        "static/sw.js",
+        mimetype="application/javascript",
+    )
+
+
+@app.route("/offline")
+def offline():
+    return render_template("offline.html")
+
+
+# ╔═══════════════════════════════════════════════════════════════════════════╗
 # ║  AUTHENTICATION                                                         ║
 # ╚═══════════════════════════════════════════════════════════════════════════╝
 
