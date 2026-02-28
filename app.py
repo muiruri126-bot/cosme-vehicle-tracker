@@ -21,6 +21,8 @@ A default **admin** account is created on first run:
     username: admin   |   password: admin123
 """
 
+import time as _time
+
 import io
 import os
 import subprocess
@@ -60,6 +62,7 @@ from models import (
     AuditLog,
     Booking,
     MaintenanceRecord,
+    PageView,
     Trip,
     User,
     Vehicle,
@@ -155,6 +158,87 @@ def force_password_change():
         if request.endpoint not in allowed_endpoints:
             flash("You must change your password before continuing.", "warning")
             return redirect(url_for("change_password"))
+
+
+# ── Analytics – request tracking ─────────────────────────────────────────────
+
+
+def _parse_device_type(ua_string):
+    """Quick heuristic to determine device type from User-Agent."""
+    if not ua_string:
+        return "unknown"
+    ua = ua_string.lower()
+    if any(k in ua for k in ("ipad", "tablet", "kindle", "silk")):
+        return "tablet"
+    if any(k in ua for k in ("iphone", "android", "mobile", "opera mini", "iemobile")):
+        return "mobile"
+    return "desktop"
+
+
+def _parse_browser(ua_string):
+    """Quick heuristic to identify browser from User-Agent."""
+    if not ua_string:
+        return "unknown"
+    ua = ua_string.lower()
+    if "edg" in ua:
+        return "Edge"
+    if "opr" in ua or "opera" in ua:
+        return "Opera"
+    if "chrome" in ua and "safari" in ua:
+        return "Chrome"
+    if "firefox" in ua:
+        return "Firefox"
+    if "safari" in ua:
+        return "Safari"
+    if "msie" in ua or "trident" in ua:
+        return "IE"
+    return "Other"
+
+
+@app.before_request
+def _analytics_start_timer():
+    """Record the request start time for response-time tracking."""
+    request._analytics_start = _time.monotonic()
+
+
+@app.after_request
+def _analytics_track_page_view(response):
+    """Log every page view for analytics (skip static files & API noise)."""
+    try:
+        # Skip static files, service worker, and favicon requests
+        path = request.path
+        if (
+            path.startswith("/static/")
+            or path == "/sw.js"
+            or path.startswith("/favicon")
+            or request.method == "OPTIONS"
+        ):
+            return response
+
+        ua_string = request.headers.get("User-Agent", "")
+        elapsed = None
+        if hasattr(request, "_analytics_start"):
+            elapsed = round((_time.monotonic() - request._analytics_start) * 1000, 1)
+
+        pv = PageView(
+            path=path[:500],
+            endpoint=request.endpoint,
+            method=request.method,
+            status_code=response.status_code,
+            user_id=current_user.id if current_user.is_authenticated else None,
+            username=current_user.username if current_user.is_authenticated else None,
+            ip_address=request.remote_addr,
+            user_agent=ua_string[:500] if ua_string else None,
+            referrer=(request.referrer or "")[:500] or None,
+            device_type=_parse_device_type(ua_string),
+            browser=_parse_browser(ua_string),
+            response_time_ms=elapsed,
+        )
+        db.session.add(pv)
+        db.session.commit()
+    except Exception:
+        db.session.rollback()  # never let analytics break the app
+    return response
 
 
 # ── Role-based access decorator ─────────────────────────────────────────────
@@ -1663,6 +1747,164 @@ def audit_log():
 
 
 # ── Run ──────────────────────────────────────────────────────────────────────
+
+
+@app.route("/analytics")
+@role_required("admin")
+def analytics_dashboard():
+    """Admin-only analytics dashboard with visit stats."""
+    from sqlalchemy import func, case, extract
+
+    now = datetime.now(timezone.utc)
+    today = now.date()
+    week_ago = now - timedelta(days=7)
+    month_ago = now - timedelta(days=30)
+
+    # ── Summary stats ────────────────────────────────────────────────
+    total_views = PageView.query.count()
+    today_views = PageView.query.filter(
+        func.date(PageView.timestamp) == today
+    ).count()
+    week_views = PageView.query.filter(PageView.timestamp >= week_ago).count()
+    month_views = PageView.query.filter(PageView.timestamp >= month_ago).count()
+
+    # Unique visitors (by IP)
+    total_unique = db.session.query(
+        func.count(func.distinct(PageView.ip_address))
+    ).scalar() or 0
+    today_unique = db.session.query(
+        func.count(func.distinct(PageView.ip_address))
+    ).filter(func.date(PageView.timestamp) == today).scalar() or 0
+    week_unique = db.session.query(
+        func.count(func.distinct(PageView.ip_address))
+    ).filter(PageView.timestamp >= week_ago).scalar() or 0
+
+    # Avg response time
+    avg_response = db.session.query(
+        func.avg(PageView.response_time_ms)
+    ).filter(PageView.response_time_ms.isnot(None)).scalar()
+    avg_response = round(avg_response, 1) if avg_response else 0
+
+    # ── Daily visits (last 30 days) for chart ────────────────────────
+    daily_views = (
+        db.session.query(
+            func.date(PageView.timestamp).label("day"),
+            func.count().label("views"),
+            func.count(func.distinct(PageView.ip_address)).label("visitors"),
+        )
+        .filter(PageView.timestamp >= month_ago)
+        .group_by(func.date(PageView.timestamp))
+        .order_by(func.date(PageView.timestamp))
+        .all()
+    )
+    chart_labels = [str(row.day) for row in daily_views]
+    chart_views = [row.views for row in daily_views]
+    chart_visitors = [row.visitors for row in daily_views]
+
+    # ── Top pages ────────────────────────────────────────────────────
+    top_pages = (
+        db.session.query(
+            PageView.path,
+            func.count().label("hits"),
+            func.count(func.distinct(PageView.ip_address)).label("unique_visitors"),
+        )
+        .filter(PageView.timestamp >= month_ago)
+        .group_by(PageView.path)
+        .order_by(func.count().desc())
+        .limit(15)
+        .all()
+    )
+
+    # ── Top users ────────────────────────────────────────────────────
+    top_users = (
+        db.session.query(
+            PageView.username,
+            func.count().label("hits"),
+            func.max(PageView.timestamp).label("last_seen"),
+        )
+        .filter(PageView.username.isnot(None), PageView.timestamp >= month_ago)
+        .group_by(PageView.username)
+        .order_by(func.count().desc())
+        .limit(15)
+        .all()
+    )
+
+    # ── Device breakdown ─────────────────────────────────────────────
+    device_stats = (
+        db.session.query(
+            PageView.device_type,
+            func.count().label("count"),
+        )
+        .filter(PageView.timestamp >= month_ago)
+        .group_by(PageView.device_type)
+        .all()
+    )
+    device_labels = [row.device_type or "unknown" for row in device_stats]
+    device_data = [row.count for row in device_stats]
+
+    # ── Browser breakdown ────────────────────────────────────────────
+    browser_stats = (
+        db.session.query(
+            PageView.browser,
+            func.count().label("count"),
+        )
+        .filter(PageView.timestamp >= month_ago)
+        .group_by(PageView.browser)
+        .order_by(func.count().desc())
+        .limit(8)
+        .all()
+    )
+    browser_labels = [row.browser or "unknown" for row in browser_stats]
+    browser_data = [row.count for row in browser_stats]
+
+    # ── Hourly activity (last 7 days) ────────────────────────────────
+    hourly_stats = (
+        db.session.query(
+            extract("hour", PageView.timestamp).label("hour"),
+            func.count().label("count"),
+        )
+        .filter(PageView.timestamp >= week_ago)
+        .group_by(extract("hour", PageView.timestamp))
+        .order_by(extract("hour", PageView.timestamp))
+        .all()
+    )
+    # Fill all 24 hours
+    hourly_map = {int(row.hour): row.count for row in hourly_stats}
+    hourly_labels = [f"{h:02d}:00" for h in range(24)]
+    hourly_data = [hourly_map.get(h, 0) for h in range(24)]
+
+    # ── Recent activity ──────────────────────────────────────────────
+    recent_views = (
+        PageView.query
+        .order_by(PageView.timestamp.desc())
+        .limit(25)
+        .all()
+    )
+
+    return render_template(
+        "analytics.html",
+        total_views=total_views,
+        today_views=today_views,
+        week_views=week_views,
+        month_views=month_views,
+        total_unique=total_unique,
+        today_unique=today_unique,
+        week_unique=week_unique,
+        avg_response=avg_response,
+        chart_labels=chart_labels,
+        chart_views=chart_views,
+        chart_visitors=chart_visitors,
+        top_pages=top_pages,
+        top_users=top_users,
+        device_labels=device_labels,
+        device_data=device_data,
+        browser_labels=browser_labels,
+        browser_data=browser_data,
+        hourly_labels=hourly_labels,
+        hourly_data=hourly_data,
+        recent_views=recent_views,
+    )
+
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))

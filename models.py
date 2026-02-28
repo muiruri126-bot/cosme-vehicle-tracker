@@ -248,6 +248,38 @@ class AuditLog(db.Model):
 
 
 # ---------------------------------------------------------------------------
+# PageView  (analytics – tracks every page visit)
+# ---------------------------------------------------------------------------
+class PageView(db.Model):
+    __tablename__ = "page_views"
+
+    id = db.Column(db.Integer, primary_key=True)
+    path = db.Column(db.String(500), nullable=False)
+    endpoint = db.Column(db.String(100), nullable=True)
+    method = db.Column(db.String(10), nullable=False, default="GET")
+    status_code = db.Column(db.Integer, nullable=True)
+    user_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=True)
+    username = db.Column(db.String(80), nullable=True)
+    ip_address = db.Column(db.String(45), nullable=True)
+    user_agent = db.Column(db.String(500), nullable=True)
+    referrer = db.Column(db.String(500), nullable=True)
+    device_type = db.Column(
+        db.String(20), nullable=True
+    )  # desktop | mobile | tablet
+    browser = db.Column(db.String(50), nullable=True)
+    response_time_ms = db.Column(db.Float, nullable=True)
+    timestamp = db.Column(
+        db.DateTime, nullable=False, default=lambda: datetime.now(timezone.utc),
+        index=True,
+    )
+
+    user = db.relationship("User", backref="page_views", lazy=True)
+
+    def __repr__(self):
+        return f"<PageView {self.path} by {self.username or 'anon'} at {self.timestamp}>"
+
+
+# ---------------------------------------------------------------------------
 # Helper: Conflict Detection
 # ---------------------------------------------------------------------------
 def check_booking_conflict(vehicle_id, start_dt, end_dt, exclude_booking_id=None):

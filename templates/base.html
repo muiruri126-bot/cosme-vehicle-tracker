@@ -113,6 +113,11 @@
             <i class="bi bi-journal-text"></i> <span>Audit Log</span>
           </a>
         </li>
+        <li class="nav-item">
+          <a class="nav-link {{ 'active' if request.endpoint == 'analytics_dashboard' }}" href="{{ url_for('analytics_dashboard') }}">
+            <i class="bi bi-graph-up"></i> <span>Analytics</span>
+          </a>
+        </li>
         {% endif %}
       </ul>
 
