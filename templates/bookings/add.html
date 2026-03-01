@@ -5,16 +5,18 @@
 
 <div class="card shadow-sm">
   <div class="card-body">
-    <form method="POST" action="{{ url_for('booking_add') }}" class="needs-validation" novalidate>
+    <form method="POST" action="{{ url_for('booking_add') }}" class="needs-validation" id="bookingForm" novalidate>
       <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
       <div class="row g-3">
         <!-- Vehicle -->
         <div class="col-md-6">
           <label for="vehicle_id" class="form-label">Vehicle</label>
           <select class="form-select" id="vehicle_id" name="vehicle_id" required>
-            <option value="" disabled selected>-- Select vehicle --</option>
+            <option value="" disabled{% if not form.get('vehicle_id') %} selected{% endif %}>-- Select vehicle --</option>
             {% for v in vehicles %}
-              <option value="{{ v.id }}"{% if v.status == 'maintenance' %} disabled{% endif %}>
+              <option value="{{ v.id }}"
+                {%- if form.get('vehicle_id') == v.id|string %} selected{% endif %}
+                {%- if v.status == 'maintenance' %} disabled{% endif %}>
                 {{ v.registration_number }} ({{ v.make }} {{ v.model }}){% if v.status == 'maintenance' %} – MAINTENANCE{% elif v.status == 'in_use' %} – IN USE{% endif %}
               </option>
             {% endfor %}
@@ -28,7 +30,7 @@
           <select class="form-select" id="driver_id" name="driver_id">
             <option value="">-- No driver assigned --</option>
             {% for d in drivers %}
-              <option value="{{ d.id }}">{{ d.full_name }}</option>
+              <option value="{{ d.id }}"{% if form.get('driver_id') == d.id|string %} selected{% endif %}>{{ d.full_name }}</option>
             {% endfor %}
           </select>
         </div>
@@ -37,27 +39,39 @@
         <div class="col-md-6">
           <label for="start_datetime_planned" class="form-label">Planned Start</label>
           <input type="datetime-local" class="form-control" id="start_datetime_planned"
-                 name="start_datetime_planned" required>
+                 name="start_datetime_planned" required
+                 value="{{ form.get('start_datetime_planned', '') }}">
           <div class="invalid-feedback">Start date/time is required.</div>
         </div>
         <div class="col-md-6">
           <label for="end_datetime_planned" class="form-label">Planned End</label>
           <input type="datetime-local" class="form-control" id="end_datetime_planned"
-                 name="end_datetime_planned" required>
+                 name="end_datetime_planned" required
+                 value="{{ form.get('end_datetime_planned', '') }}">
           <div class="invalid-feedback">End date/time is required and must be after start.</div>
+        </div>
+
+        <!-- Conflict warning (populated by AJAX) -->
+        <div class="col-12" id="conflict-alert-wrapper" style="display:none;">
+          <div class="alert alert-warning d-flex align-items-start mb-0" id="conflict-alert">
+            <i class="bi bi-exclamation-triangle-fill me-2 mt-1"></i>
+            <span id="conflict-message"></span>
+          </div>
         </div>
 
         <!-- Route -->
         <div class="col-md-6">
           <label for="route_from" class="form-label">Route From</label>
           <input type="text" class="form-control" id="route_from"
-                 name="route_from" required placeholder="e.g. Kilifi Office">
+                 name="route_from" required placeholder="e.g. Kilifi Office"
+                 value="{{ form.get('route_from', '') }}">
           <div class="invalid-feedback">Route From is required.</div>
         </div>
         <div class="col-md-6">
           <label for="route_to" class="form-label">Route To</label>
           <input type="text" class="form-control" id="route_to"
-                 name="route_to" required placeholder="e.g. Mombasa">
+                 name="route_to" required placeholder="e.g. Mombasa"
+                 value="{{ form.get('route_to', '') }}">
           <div class="invalid-feedback">Route To is required.</div>
         </div>
 
@@ -65,7 +79,7 @@
         <div class="col-12">
           <label for="purpose" class="form-label">Purpose</label>
           <textarea class="form-control" id="purpose" name="purpose"
-                    rows="2" required placeholder="Describe the purpose of the trip"></textarea>
+                    rows="2" required placeholder="Describe the purpose of the trip">{{ form.get('purpose', '') }}</textarea>
           <div class="invalid-feedback">Purpose is required.</div>
         </div>
 
@@ -73,17 +87,19 @@
         <div class="col-md-6">
           <label for="activity_code" class="form-label">Activity Code</label>
           <input type="text" class="form-control" id="activity_code"
-                 name="activity_code" placeholder="Optional">
+                 name="activity_code" placeholder="Optional"
+                 value="{{ form.get('activity_code', '') }}">
         </div>
         <div class="col-md-6">
           <label for="project_code" class="form-label">Project Code</label>
           <input type="text" class="form-control" id="project_code"
-                 name="project_code" placeholder="Optional">
+                 name="project_code" placeholder="Optional"
+                 value="{{ form.get('project_code', '') }}">
         </div>
       </div>
 
       <div class="mt-4">
-        <button type="submit" class="btn btn-success">
+        <button type="submit" class="btn btn-success" id="submitBtn">
           <i class="bi bi-send"></i> Submit Booking Request
         </button>
         <a href="{{ url_for('booking_list') }}" class="btn btn-outline-secondary ms-2">Cancel</a>
@@ -91,4 +107,58 @@
     </form>
   </div>
 </div>
+{% endblock %}
+
+{% block head %}
+<style>
+  #conflict-alert { font-size: .9rem; }
+</style>
+{% endblock %}
+
+{% block scripts %}
+<script>
+(function() {
+  var vehicleEl = document.getElementById('vehicle_id');
+  var startEl   = document.getElementById('start_datetime_planned');
+  var endEl     = document.getElementById('end_datetime_planned');
+  var wrapper   = document.getElementById('conflict-alert-wrapper');
+  var msgEl     = document.getElementById('conflict-message');
+  var submitBtn = document.getElementById('submitBtn');
+  var timer     = null;
+
+  function checkConflict() {
+    var vid   = vehicleEl.value;
+    var start = startEl.value;
+    var end   = endEl.value;
+    if (!vid || !start || !end) { wrapper.style.display = 'none'; return; }
+    if (new Date(end) <= new Date(start)) { wrapper.style.display = 'none'; return; }
+
+    clearTimeout(timer);
+    timer = setTimeout(function() {
+      fetch('{{ url_for("api_check_conflict") }}?vehicle_id=' + vid +
+            '&start=' + encodeURIComponent(start) +
+            '&end=' + encodeURIComponent(end))
+        .then(function(r) { return r.json(); })
+        .then(function(data) {
+          if (data.conflict) {
+            msgEl.textContent = data.message;
+            wrapper.style.display = '';
+          } else {
+            wrapper.style.display = 'none';
+          }
+        })
+        .catch(function() { wrapper.style.display = 'none'; });
+    }, 300);
+  }
+
+  vehicleEl.addEventListener('change', checkConflict);
+  startEl.addEventListener('change', checkConflict);
+  endEl.addEventListener('change', checkConflict);
+
+  /* Also run on page load if form was re-rendered with values */
+  if (vehicleEl.value && startEl.value && endEl.value) {
+    checkConflict();
+  }
+})();
+</script>
 {% endblock %}

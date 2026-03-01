@@ -935,8 +935,8 @@ def booking_add():
                     f"and cannot be booked."
                 )
 
-        # ── Conflict check ────────────────────────────────────────────
-        if not errors and start_dt and end_dt:
+        # ── Conflict check (runs independently of other errors) ─────────
+        if vehicle_id and start_dt and end_dt:
             conflict = check_booking_conflict(vehicle_id, start_dt, end_dt)
             if conflict:
                 errors.append(
@@ -950,7 +950,8 @@ def booking_add():
             for e in errors:
                 flash(e, "danger")
             return render_template(
-                "bookings/add.html", vehicles=vehicles, drivers=drivers
+                "bookings/add.html", vehicles=vehicles, drivers=drivers,
+                form=request.form,
             )
 
         driver_id = request.form.get("driver_id")
@@ -983,12 +984,14 @@ def booking_add():
                 "danger",
             )
             return render_template(
-                "bookings/add.html", vehicles=vehicles, drivers=drivers
+                "bookings/add.html", vehicles=vehicles, drivers=drivers,
+                form=request.form,
             )
 
         db.session.commit()
         log_action("create", "Booking", booking.id, f"Created booking: vehicle={booking.vehicle.registration_number}, route={route_from}→{route_to}")
         flash("Booking request created (status: pending).", "success")
+
 
         # ── Notify all admins about the new booking request ────────────
         admins = User.query.filter_by(role="admin", is_active_user=True).all()
@@ -1032,7 +1035,35 @@ def booking_add():
 
         return redirect(url_for("booking_list"))
 
-    return render_template("bookings/add.html", vehicles=vehicles, drivers=drivers)
+    return render_template("bookings/add.html", vehicles=vehicles, drivers=drivers, form={})
+
+
+@app.route("/api/check-conflict")
+@login_required
+def api_check_conflict():
+    """AJAX endpoint: check if a vehicle has conflicting bookings."""
+    try:
+        vehicle_id = int(request.args.get("vehicle_id", 0))
+        start_dt = datetime.fromisoformat(request.args.get("start", ""))
+        end_dt = datetime.fromisoformat(request.args.get("end", ""))
+    except (ValueError, TypeError):
+        return jsonify(conflict=False)
+
+    if not vehicle_id or end_dt <= start_dt:
+        return jsonify(conflict=False)
+
+    conflict = check_booking_conflict(vehicle_id, start_dt, end_dt)
+    if conflict:
+        return jsonify(
+            conflict=True,
+            message=(
+                f"This vehicle is already booked from "
+                f"{conflict.start_datetime_planned.strftime('%d %b %Y %H:%M')} to "
+                f"{conflict.end_datetime_planned.strftime('%d %b %Y %H:%M')} "
+                f"(Booking #{conflict.id} by {conflict.requester_name})."
+            ),
+        )
+    return jsonify(conflict=False)
 
 
 @app.route("/bookings/<int:booking_id>")
