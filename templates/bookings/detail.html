@@ -82,9 +82,20 @@
   {% endif %}
 
   {% if booking.status == 'approved' and not booking.trip %}
+    {% if booking.start_datetime_planned.date() <= today_date %}
     <a href="{{ url_for('trip_start', booking_id=booking.id) }}" class="btn btn-primary">
       <i class="bi bi-play-circle"></i> Start Trip
     </a>
+    {% else %}
+    <span class="d-inline-block" tabindex="0"
+          data-bs-toggle="tooltip" data-bs-placement="top"
+          title="Trip cannot start before {{ booking.start_datetime_planned.strftime('%d %b %Y') }}">
+      <button class="btn btn-primary" disabled style="pointer-events: none;">
+        <i class="bi bi-play-circle"></i> Start Trip
+        <small class="ms-1">(from {{ booking.start_datetime_planned.strftime('%d %b') }})</small>
+      </button>
+    </span>
+    {% endif %}
   {% endif %}
 
   {% if booking.trip and not booking.trip.end_actual_datetime %}

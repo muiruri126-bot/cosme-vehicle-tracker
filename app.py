@@ -136,6 +136,12 @@ def load_user(user_id):
     return db.session.get(User, int(user_id))
 
 
+@app.context_processor
+def inject_today_date():
+    """Make today's date available in all templates."""
+    return {"today_date": datetime.now(timezone.utc).date()}
+
+
 @app.before_request
 def ensure_session():
     """Make every session permanent so the cookie persists across requests."""
@@ -1262,6 +1268,18 @@ def trip_start(booking_id):
 
     if booking.trip is not None:
         flash("A trip has already been started for this booking.", "warning")
+        return redirect(url_for("booking_detail", booking_id=booking.id))
+
+    # Prevent starting a trip before the planned start date
+    now = datetime.now(timezone.utc)
+    planned_start = booking.start_datetime_planned
+    # Compare dates only (ignore time) so the trip can start any time on the planned day
+    if now.date() < planned_start.date():
+        flash(
+            f"This trip cannot be started yet. The planned start date is "
+            f"{planned_start.strftime('%d %b %Y')}.",
+            "warning",
+        )
         return redirect(url_for("booking_detail", booking_id=booking.id))
 
     if request.method == "POST":
