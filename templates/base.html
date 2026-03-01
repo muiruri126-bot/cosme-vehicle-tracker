@@ -329,21 +329,22 @@ window.addEventListener('appinstalled', function () {
   var splash = document.getElementById('splash-screen');
   if (!splash) return;
 
-  // Only show splash if launched as installed PWA or first visit of session
   var isPWA = window.matchMedia('(display-mode: standalone)').matches ||
               window.navigator.standalone === true;
   var splashShown = sessionStorage.getItem('vrt_splash_shown');
 
-  if (!isPWA && splashShown) {
+  // Only show the splash on the FIRST page load of the session (app opening).
+  // All subsequent navigations (form submits, approvals, link clicks) skip it.
+  if (splashShown) {
     splash.remove();
     document.body.classList.add('app-loaded');
     return;
   }
 
+  // First visit – show splash with entrance animation
   sessionStorage.setItem('vrt_splash_shown', '1');
   document.body.style.overflow = 'hidden';
 
-  // Dismiss splash when page fully loaded (min 2s for animation)
   var minDelay = isPWA ? 2500 : 1800;
   var startTime = Date.now();
 
@@ -355,7 +356,8 @@ window.addEventListener('appinstalled', function () {
       setTimeout(function() {
         splash.remove();
         document.body.style.overflow = '';
-        document.body.classList.add('app-loaded');
+        // First load uses app-fresh for animated entrance
+        document.body.classList.add('app-loaded', 'app-fresh');
       }, 600);
     }, remaining);
   }

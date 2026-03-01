@@ -134,39 +134,50 @@ main { flex: 1; }
 
 /* ══════════════════════════════════════════════════════════════════════
    PAGE ENTRANCE ANIMATIONS
+   Only play on the very first page load (app-opening).
+   Subsequent navigations (form submits, approvals, etc.) use
+   .app-loaded-fast which shows content instantly.
    ══════════════════════════════════════════════════════════════════════ */
-.app-loaded main {
+
+/* First visit – animated entrance */
+.app-fresh main {
   animation: pageEntrance .5s cubic-bezier(.16,1,.3,1) both;
 }
+/* Subsequent visits – instant display */
+.app-loaded main,
+.app-loaded-fast main {
+  opacity: 1;
+}
+
 @keyframes pageEntrance {
   from { opacity: 0; transform: translateY(16px); }
   to   { opacity: 1; transform: translateY(0); }
 }
 
-/* Staggered card entrance */
-.app-loaded .stat-card {
+/* Staggered card entrance – only on first load */
+.app-fresh .stat-card {
   animation: cardPop .45s cubic-bezier(.16,1,.3,1) both;
 }
-.app-loaded .stat-card:nth-child(1) { animation-delay: .1s; }
-.app-loaded .stat-card:nth-child(2) { animation-delay: .2s; }
-.app-loaded .stat-card:nth-child(3) { animation-delay: .3s; }
-.app-loaded .stat-card:nth-child(4) { animation-delay: .4s; }
+.app-fresh .stat-card:nth-child(1) { animation-delay: .1s; }
+.app-fresh .stat-card:nth-child(2) { animation-delay: .2s; }
+.app-fresh .stat-card:nth-child(3) { animation-delay: .3s; }
+.app-fresh .stat-card:nth-child(4) { animation-delay: .4s; }
 
 @keyframes cardPop {
   from { opacity: 0; transform: translateY(20px) scale(.95); }
   to   { opacity: 1; transform: translateY(0) scale(1); }
 }
 
-/* Table row entrance */
-.app-loaded .table tbody tr {
+/* Table row entrance – only on first load */
+.app-fresh .table tbody tr {
   animation: rowSlide .35s ease both;
 }
-.app-loaded .table tbody tr:nth-child(1)  { animation-delay: .15s; }
-.app-loaded .table tbody tr:nth-child(2)  { animation-delay: .2s; }
-.app-loaded .table tbody tr:nth-child(3)  { animation-delay: .25s; }
-.app-loaded .table tbody tr:nth-child(4)  { animation-delay: .3s; }
-.app-loaded .table tbody tr:nth-child(5)  { animation-delay: .35s; }
-.app-loaded .table tbody tr:nth-child(n+6) { animation-delay: .4s; }
+.app-fresh .table tbody tr:nth-child(1)  { animation-delay: .15s; }
+.app-fresh .table tbody tr:nth-child(2)  { animation-delay: .2s; }
+.app-fresh .table tbody tr:nth-child(3)  { animation-delay: .25s; }
+.app-fresh .table tbody tr:nth-child(4)  { animation-delay: .3s; }
+.app-fresh .table tbody tr:nth-child(5)  { animation-delay: .35s; }
+.app-fresh .table tbody tr:nth-child(n+6) { animation-delay: .4s; }
 
 @keyframes rowSlide {
   from { opacity: 0; transform: translateX(-12px); }
