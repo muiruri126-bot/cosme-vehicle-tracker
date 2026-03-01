@@ -82,6 +82,47 @@
     }
   }
 
+  // ── Submit button loading spinner ───────────────────────────────────────────
+  // Shows a spinner and disables the button on form submit to prevent
+  // double-clicks and give users visual feedback that something is happening.
+  document.querySelectorAll('form').forEach(function (form) {
+    form.addEventListener('submit', function (e) {
+      // If the form has needs-validation and is invalid, don't show spinner
+      if (form.classList.contains('needs-validation') && !form.checkValidity()) {
+        return;
+      }
+
+      var btn = form.querySelector('button[type="submit"]');
+      if (!btn || btn.disabled) return;
+
+      // Small delay so confirm() dialogs can cancel before we modify the button
+      setTimeout(function () {
+        btn.disabled = true;
+        btn.classList.add('btn-loading');
+        // Store original content to restore if navigation fails
+        btn.dataset.originalHtml = btn.innerHTML;
+        var btnText = btn.textContent.trim();
+        btn.innerHTML =
+          '<span class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>' +
+          'Processing\u2026';
+      }, 0);
+    });
+  });
+
+  // Restore buttons when user navigates back (bfcache)
+  window.addEventListener('pageshow', function (e) {
+    if (e.persisted) {
+      document.querySelectorAll('button.btn-loading').forEach(function (btn) {
+        btn.disabled = false;
+        btn.classList.remove('btn-loading');
+        if (btn.dataset.originalHtml) {
+          btn.innerHTML = btn.dataset.originalHtml;
+          delete btn.dataset.originalHtml;
+        }
+      });
+    }
+  });
+
   // ── Live feedback on input ───────────────────────────────────────────────
   // Clear custom validity as user types so they can re-submit
   document.querySelectorAll("input, select, textarea").forEach(function (el) {

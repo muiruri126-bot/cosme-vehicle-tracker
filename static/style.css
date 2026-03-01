@@ -133,6 +133,19 @@ main { flex: 1; }
 }
 
 /* ══════════════════════════════════════════════════════════════════════
+   FORM SUBMIT LOADING STATE
+   ══════════════════════════════════════════════════════════════════════ */
+button.btn-loading {
+  position: relative;
+  cursor: wait !important;
+  opacity: .75;
+  pointer-events: none;
+}
+button.btn-loading .spinner-border {
+  vertical-align: middle;
+}
+
+/* ══════════════════════════════════════════════════════════════════════
    PAGE ENTRANCE ANIMATIONS
    Only play on the very first page load (app-opening).
    Subsequent navigations (form submits, approvals, etc.) use
