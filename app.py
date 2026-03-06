@@ -313,6 +313,30 @@ def send_notification(subject, recipients, body):
 
 with app.app_context():
     db.create_all()
+
+    # ── Auto-migrate: add soft-delete columns to existing tables ─────────
+    from sqlalchemy import inspect, text
+    inspector = inspect(db.engine)
+    soft_delete_columns = {
+        "vehicles": ["is_deleted", "deleted_at"],
+        "bookings": ["is_deleted", "deleted_at"],
+        "trips": ["is_deleted", "deleted_at"],
+        "maintenance_records": ["is_deleted", "deleted_at"],
+    }
+    for table_name, columns in soft_delete_columns.items():
+        existing_cols = [col["name"] for col in inspector.get_columns(table_name)]
+        for col_name in columns:
+            if col_name not in existing_cols:
+                if col_name == "is_deleted":
+                    db.session.execute(text(
+                        f"ALTER TABLE {table_name} ADD COLUMN is_deleted BOOLEAN NOT NULL DEFAULT 0"
+                    ))
+                elif col_name == "deleted_at":
+                    db.session.execute(text(
+                        f"ALTER TABLE {table_name} ADD COLUMN deleted_at DATETIME"
+                    ))
+        db.session.commit()
+
     # Create default admin if none exists
     if not User.query.filter_by(username="admin").first():
         admin = User(
@@ -649,19 +673,17 @@ def user_delete(user_id):
     if user.id == current_user.id:
         flash("You cannot delete your own account.", "danger")
         return redirect(url_for("user_list"))
-    # Remove associated bookings & trips
+    # Soft-delete associated bookings & trips
     for booking in user.bookings_requested:
-        if booking.trip:
-            db.session.delete(booking.trip)
-        db.session.delete(booking)
+        booking.soft_delete()
     # Unassign from bookings where user was driver
     for booking in user.bookings_driven:
         booking.driver_id = None
     username_deleted = user.username
-    db.session.delete(user)
+    user.is_active_user = False
     db.session.commit()
-    log_action("delete", "User", user_id, f"Deleted user '{username_deleted}' and associated records")
-    flash(f"User '{username_deleted}' and their associated records have been deleted.", "success")
+    log_action("delete", "User", user_id, f"Deactivated user '{username_deleted}' and archived associated records")
+    flash(f"User '{username_deleted}' has been deactivated and their records archived.", "success")
     return redirect(url_for("user_list"))
 
 
@@ -711,11 +733,11 @@ def profile():
 @login_required
 def dashboard():
     """Home page – quick stats and upcoming approved bookings."""
-    vehicle_count = Vehicle.query.count()
-    pending_count = Booking.query.filter_by(status="pending").count()
-    maintenance_due = MaintenanceRecord.query.filter_by(status="scheduled").count()
+    vehicle_count = Vehicle.query.filter_by(is_deleted=False).count()
+    pending_count = Booking.query.filter_by(status="pending", is_deleted=False).count()
+    maintenance_due = MaintenanceRecord.query.filter_by(status="scheduled", is_deleted=False).count()
     upcoming = (
-        Booking.query.filter_by(status="approved")
+        Booking.query.filter_by(status="approved", is_deleted=False)
         .order_by(Booking.start_datetime_planned)
         .all()
     )
@@ -737,7 +759,7 @@ def dashboard():
 @login_required
 def vehicle_list():
     page = request.args.get("page", 1, type=int)
-    pagination = Vehicle.query.order_by(Vehicle.registration_number).paginate(
+    pagination = Vehicle.query.filter_by(is_deleted=False).order_by(Vehicle.registration_number).paginate(
         page=page, per_page=PER_PAGE, error_out=False
     )
     return render_template("vehicles/list.html", vehicles=pagination.items, pagination=pagination)
@@ -765,7 +787,7 @@ def vehicle_add():
             errors.append("Invalid vehicle status.")
 
         # Uniqueness
-        if reg and Vehicle.query.filter_by(registration_number=reg).first():
+        if reg and Vehicle.query.filter_by(registration_number=reg, is_deleted=False).first():
             errors.append(f"Registration number '{reg}' already exists.")
 
         if errors:
@@ -812,7 +834,8 @@ def vehicle_edit(vehicle_id):
         # Uniqueness (exclude this vehicle)
         if reg:
             dup = Vehicle.query.filter(
-                Vehicle.registration_number == reg, Vehicle.id != vehicle.id
+                Vehicle.registration_number == reg, Vehicle.id != vehicle.id,
+                Vehicle.is_deleted == False
             ).first()
             if dup:
                 errors.append(f"Registration number '{reg}' is already used by another vehicle.")
@@ -837,18 +860,11 @@ def vehicle_edit(vehicle_id):
 @role_required("admin")
 def vehicle_delete(vehicle_id):
     vehicle = db.get_or_404(Vehicle, vehicle_id)
-    # Delete associated maintenance records
-    for rec in vehicle.maintenance_records:
-        db.session.delete(rec)
-    # Delete associated bookings and their trips
-    for booking in vehicle.bookings:
-        if booking.trip:
-            db.session.delete(booking.trip)
-        db.session.delete(booking)
-    db.session.delete(vehicle)
+    # Soft-delete vehicle and all associated records
+    vehicle.soft_delete()
     db.session.commit()
-    log_action("delete", "Vehicle", vehicle_id, f"Deleted vehicle '{vehicle.registration_number}' and all associated records")
-    flash(f"Vehicle '{vehicle.registration_number}' and all associated records have been deleted.", "success")
+    log_action("delete", "Vehicle", vehicle_id, f"Archived vehicle '{vehicle.registration_number}' and all associated records")
+    flash(f"Vehicle '{vehicle.registration_number}' and all associated records have been archived.", "success")
     return redirect(url_for("vehicle_list"))
 
 
@@ -862,7 +878,7 @@ def vehicle_delete(vehicle_id):
 def booking_list():
     status_filter = request.args.get("status", "")
     page = request.args.get("page", 1, type=int)
-    query = Booking.query
+    query = Booking.query.filter_by(is_deleted=False)
     if status_filter:
         query = query.filter_by(status=status_filter)
     pagination = query.order_by(Booking.start_datetime_planned.desc()).paginate(
@@ -879,8 +895,8 @@ def booking_list():
 @app.route("/bookings/add", methods=["GET", "POST"])
 @login_required
 def booking_add():
-    vehicles = Vehicle.query.order_by(Vehicle.registration_number).all()
-    drivers = User.query.filter_by(role="driver").order_by(User.full_name).all()
+    vehicles = Vehicle.query.filter_by(is_deleted=False).order_by(Vehicle.registration_number).all()
+    drivers = User.query.filter_by(role="driver", is_active_user=True).order_by(User.full_name).all()
 
     if request.method == "POST":
         errors = []
@@ -1076,7 +1092,7 @@ def api_check_conflict():
 @login_required
 def booking_detail(booking_id):
     booking = db.get_or_404(Booking, booking_id)
-    drivers = User.query.filter_by(role="driver").order_by(User.full_name).all()
+    drivers = User.query.filter_by(role="driver", is_active_user=True).order_by(User.full_name).all()
     return render_template("bookings/detail.html", booking=booking, drivers=drivers)
 
 
@@ -1237,13 +1253,11 @@ def booking_cancel(booking_id):
 def booking_delete(booking_id):
     booking = db.get_or_404(Booking, booking_id)
     vehicle_reg = booking.vehicle.registration_number
-    # Delete associated trip first
-    if booking.trip:
-        db.session.delete(booking.trip)
-    db.session.delete(booking)
+    # Soft-delete booking and associated trip
+    booking.soft_delete()
     db.session.commit()
-    log_action("delete", "Booking", booking_id, f"Deleted booking #{booking_id} ({vehicle_reg})")
-    flash(f"Booking #{booking_id} ({vehicle_reg}) has been deleted.", "success")
+    log_action("delete", "Booking", booking_id, f"Archived booking #{booking_id} ({vehicle_reg})")
+    flash(f"Booking #{booking_id} ({vehicle_reg}) has been archived.", "success")
     return redirect(url_for("booking_list"))
 
 
@@ -1435,7 +1449,7 @@ def trip_end(booking_id):
 def maintenance_list():
     status_filter = request.args.get("status", "")
     page = request.args.get("page", 1, type=int)
-    query = MaintenanceRecord.query
+    query = MaintenanceRecord.query.filter_by(is_deleted=False)
     if status_filter:
         query = query.filter_by(status=status_filter)
     pagination = query.order_by(MaintenanceRecord.scheduled_date.desc()).paginate(
@@ -1452,7 +1466,7 @@ def maintenance_list():
 @app.route("/maintenance/add", methods=["GET", "POST"])
 @role_required("admin")
 def maintenance_add():
-    vehicles = Vehicle.query.order_by(Vehicle.registration_number).all()
+    vehicles = Vehicle.query.filter_by(is_deleted=False).order_by(Vehicle.registration_number).all()
     if request.method == "POST":
         errors = []
 
@@ -1553,10 +1567,11 @@ def maintenance_cancel(rec_id):
 def maintenance_delete(rec_id):
     rec = db.get_or_404(MaintenanceRecord, rec_id)
     vehicle_reg = rec.vehicle.registration_number
-    db.session.delete(rec)
+    # Soft-delete maintenance record
+    rec.soft_delete()
     db.session.commit()
-    log_action("delete", "MaintenanceRecord", rec_id, f"Deleted maintenance record for vehicle '{vehicle_reg}'")
-    flash(f"Maintenance record for '{vehicle_reg}' has been deleted.", "success")
+    log_action("delete", "MaintenanceRecord", rec_id, f"Archived maintenance record for vehicle '{vehicle_reg}'")
+    flash(f"Maintenance record for '{vehicle_reg}' has been archived.", "success")
     return redirect(url_for("maintenance_list"))
 
 
@@ -1568,7 +1583,7 @@ def maintenance_delete(rec_id):
 @app.route("/reports/vehicle", methods=["GET"])
 @login_required
 def vehicle_report():
-    vehicles = Vehicle.query.order_by(Vehicle.registration_number).all()
+    vehicles = Vehicle.query.filter_by(is_deleted=False).order_by(Vehicle.registration_number).all()
 
     trips = []
     total_distance = 0
@@ -1588,6 +1603,8 @@ def vehicle_report():
                 Trip.start_actual_datetime >= dt_from,
                 Trip.start_actual_datetime <= dt_to,
                 Trip.end_actual_datetime.isnot(None),
+                Trip.is_deleted == False,
+                Booking.is_deleted == False,
             )
             .order_by(Trip.start_actual_datetime)
             .all()
@@ -1623,7 +1640,11 @@ def budget_report():
             db.func.sum(Trip.fuel_cost).label("total_cost"),
         )
         .join(Trip, Trip.booking_id == Booking.id)
-        .filter(Trip.end_actual_datetime.isnot(None))
+        .filter(
+            Trip.end_actual_datetime.isnot(None),
+            Trip.is_deleted == False,
+            Booking.is_deleted == False,
+        )
         .group_by(Booking.project_code)
         .all()
     )
@@ -1657,6 +1678,8 @@ def vehicle_report_export():
             Trip.start_actual_datetime >= dt_from,
             Trip.start_actual_datetime <= dt_to,
             Trip.end_actual_datetime.isnot(None),
+            Trip.is_deleted == False,
+            Booking.is_deleted == False,
         )
         .order_by(Trip.start_actual_datetime)
         .all()
@@ -1749,7 +1772,8 @@ def calendar_view():
 def api_bookings():
     """Return bookings as JSON events for FullCalendar."""
     bookings = Booking.query.filter(
-        Booking.status.in_(["pending", "approved"])
+        Booking.status.in_(["pending", "approved"]),
+        Booking.is_deleted == False
     ).all()
 
     colour_map = {
@@ -1828,16 +1852,36 @@ def analytics_dashboard():
     week_views = PageView.query.filter(PageView.timestamp >= week_ago).count()
     month_views = PageView.query.filter(PageView.timestamp >= month_ago).count()
 
-    # Unique visitors (by IP)
-    total_unique = db.session.query(
-        func.count(func.distinct(PageView.ip_address))
-    ).scalar() or 0
-    today_unique = db.session.query(
-        func.count(func.distinct(PageView.ip_address))
-    ).filter(func.date(PageView.timestamp) == today).scalar() or 0
-    week_unique = db.session.query(
-        func.count(func.distinct(PageView.ip_address))
-    ).filter(PageView.timestamp >= week_ago).scalar() or 0
+    # Unique visitors (by user_id for logged-in, IP for anonymous)
+    # Don't count the same person twice: use user_id when available,
+    # fall back to ip_address for anonymous visitors.
+    def _count_unique(base_query=None):
+        q = db.session.query(PageView)
+        if base_query is not None:
+            q = base_query
+        logged_in = q.filter(PageView.user_id.isnot(None)).with_entities(
+            func.count(func.distinct(PageView.user_id))
+        ).scalar() or 0
+        # Anonymous visitors: no user_id, count distinct IPs,
+        # but exclude IPs already seen with a logged-in session
+        known_ips_sub = q.filter(PageView.user_id.isnot(None)).with_entities(
+            PageView.ip_address
+        ).distinct().subquery()
+        anon = q.filter(
+            PageView.user_id.is_(None),
+            ~PageView.ip_address.in_(db.session.query(known_ips_sub))
+        ).with_entities(
+            func.count(func.distinct(PageView.ip_address))
+        ).scalar() or 0
+        return logged_in + anon
+
+    total_unique = _count_unique(PageView.query)
+    today_unique = _count_unique(
+        PageView.query.filter(func.date(PageView.timestamp) == today)
+    )
+    week_unique = _count_unique(
+        PageView.query.filter(PageView.timestamp >= week_ago)
+    )
 
     # Avg response time
     avg_response = db.session.query(
@@ -1845,12 +1889,18 @@ def analytics_dashboard():
     ).filter(PageView.response_time_ms.isnot(None)).scalar()
     avg_response = round(avg_response, 1) if avg_response else 0
 
+    # Visitor key: use user_id for logged-in users, ip for anonymous
+    visitor_key = case(
+        (PageView.user_id.isnot(None), func.cast(PageView.user_id, db.String)),
+        else_=PageView.ip_address,
+    )
+
     # ── Daily visits (last 30 days) for chart ────────────────────────
     daily_views = (
         db.session.query(
             func.date(PageView.timestamp).label("day"),
             func.count().label("views"),
-            func.count(func.distinct(PageView.ip_address)).label("visitors"),
+            func.count(func.distinct(visitor_key)).label("visitors"),
         )
         .filter(PageView.timestamp >= month_ago)
         .group_by(func.date(PageView.timestamp))
@@ -1866,7 +1916,7 @@ def analytics_dashboard():
         db.session.query(
             PageView.path,
             func.count().label("hits"),
-            func.count(func.distinct(PageView.ip_address)).label("unique_visitors"),
+            func.count(func.distinct(visitor_key)).label("unique_visitors"),
         )
         .filter(PageView.timestamp >= month_ago)
         .group_by(PageView.path)
