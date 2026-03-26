@@ -24,7 +24,8 @@
           <div class="invalid-feedback">Please select a vehicle.</div>
         </div>
 
-        <!-- Driver (optional) -->
+        <!-- Driver (admin only) -->
+        {% if current_user.is_admin %}
         <div class="col-md-6">
           <label for="driver_id" class="form-label">Assigned Driver <small class="text-muted">– optional</small></label>
           <select class="form-select" id="driver_id" name="driver_id">
@@ -34,6 +35,7 @@
             {% endfor %}
           </select>
         </div>
+        {% endif %}
 
         <!-- Dates -->
         <div class="col-md-6">

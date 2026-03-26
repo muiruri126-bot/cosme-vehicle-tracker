@@ -26,8 +26,10 @@
           <dt>Requester</dt>
           <dd>{{ booking.requester_name }}</dd>
 
+          {% if current_user.is_admin %}
           <dt>Driver</dt>
           <dd>{{ booking.driver.full_name if booking.driver else '– Not assigned –' }}</dd>
+          {% endif %}
 
           <dt>Route</dt>
           <dd>{{ booking.route_from }} &rarr; {{ booking.route_to }}</dd>

@@ -977,7 +977,7 @@ def booking_add():
                 form=request.form,
             )
 
-        driver_id = request.form.get("driver_id")
+        driver_id = request.form.get("driver_id") if current_user.is_admin else None
         booking = Booking(
             requester_name=current_user.full_name,
             requester_id=current_user.id,
