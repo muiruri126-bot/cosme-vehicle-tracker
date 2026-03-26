@@ -66,6 +66,7 @@ from models import (
     Trip,
     User,
     Vehicle,
+    VehicleLocation,
     check_booking_conflict,
     db,
 )
@@ -2014,6 +2015,142 @@ def analytics_dashboard():
         hourly_data=hourly_data,
         recent_views=recent_views,
     )
+
+
+# ╔═══════════════════════════════════════════════════════════════════════════╗
+# ║  GPS / LIVE VEHICLE TRACKING                                            ║
+# ╚═══════════════════════════════════════════════════════════════════════════╝
+
+
+@app.route("/tracking")
+@login_required
+def tracking_view():
+    """Live map showing all vehicles currently on a trip."""
+    return render_template("tracking.html")
+
+
+@app.route("/api/gps/update", methods=["POST"])
+@login_required
+def gps_update():
+    """Receive a GPS location ping from a driver's browser during an active trip."""
+    if current_user.role not in ("admin", "driver"):
+        return jsonify({"error": "Unauthorised"}), 403
+
+    data = request.get_json(silent=True)
+    if not data:
+        return jsonify({"error": "Invalid JSON"}), 400
+
+    trip_id = data.get("trip_id")
+    lat = data.get("latitude")
+    lng = data.get("longitude")
+
+    if trip_id is None or lat is None or lng is None:
+        return jsonify({"error": "trip_id, latitude, and longitude are required"}), 400
+
+    try:
+        trip_id = int(trip_id)
+        lat = float(lat)
+        lng = float(lng)
+    except (ValueError, TypeError):
+        return jsonify({"error": "Invalid data types"}), 400
+
+    # Validate coordinate ranges
+    if not (-90 <= lat <= 90) or not (-180 <= lng <= 180):
+        return jsonify({"error": "Coordinates out of range"}), 400
+
+    trip = db.session.get(Trip, trip_id)
+    if not trip or trip.end_actual_datetime is not None:
+        return jsonify({"error": "No active trip found"}), 404
+
+    loc = VehicleLocation(
+        vehicle_id=trip.booking.vehicle_id,
+        trip_id=trip_id,
+        latitude=lat,
+        longitude=lng,
+        accuracy=data.get("accuracy"),
+        speed=data.get("speed"),
+        heading=data.get("heading"),
+    )
+    db.session.add(loc)
+    db.session.commit()
+    return jsonify({"ok": True}), 201
+
+
+@app.route("/api/gps/vehicles")
+@login_required
+def gps_vehicles():
+    """Return the latest GPS position for every vehicle currently on a trip."""
+    # Find all active trips (started but not ended, not deleted)
+    active_trips = (
+        Trip.query.join(Booking)
+        .filter(
+            Trip.start_actual_datetime.isnot(None),
+            Trip.end_actual_datetime.is_(None),
+            Trip.is_deleted == False,
+            Booking.is_deleted == False,
+        )
+        .all()
+    )
+
+    vehicles = []
+    for trip in active_trips:
+        # Get the most recent location ping for this trip
+        latest = (
+            VehicleLocation.query
+            .filter_by(trip_id=trip.id)
+            .order_by(VehicleLocation.timestamp.desc())
+            .first()
+        )
+        if not latest:
+            continue
+
+        booking = trip.booking
+        vehicle = booking.vehicle
+        driver_name = booking.driver.full_name if booking.driver else "Unassigned"
+
+        vehicles.append({
+            "vehicle_id": vehicle.id,
+            "registration": vehicle.registration_number,
+            "make_model": f"{vehicle.make} {vehicle.model}",
+            "driver": driver_name,
+            "route": f"{booking.route_from} → {booking.route_to}",
+            "trip_id": trip.id,
+            "booking_id": booking.id,
+            "latitude": latest.latitude,
+            "longitude": latest.longitude,
+            "speed": latest.speed,
+            "heading": latest.heading,
+            "accuracy": latest.accuracy,
+            "last_update": latest.timestamp.strftime("%d %b %Y %H:%M:%S"),
+        })
+
+    return jsonify(vehicles)
+
+
+@app.route("/api/gps/trip/<int:trip_id>/trail")
+@login_required
+def gps_trip_trail(trip_id):
+    """Return the full GPS trail for a specific trip (for route replay)."""
+    trip = db.session.get(Trip, trip_id)
+    if not trip:
+        return jsonify({"error": "Trip not found"}), 404
+
+    points = (
+        VehicleLocation.query
+        .filter_by(trip_id=trip_id)
+        .order_by(VehicleLocation.timestamp)
+        .all()
+    )
+    trail = [
+        {
+            "lat": p.latitude,
+            "lng": p.longitude,
+            "speed": p.speed,
+            "timestamp": p.timestamp.strftime("%H:%M:%S"),
+        }
+        for p in points
+    ]
+    return jsonify(trail)
 
 
 if __name__ == "__main__":

@@ -299,12 +299,14 @@ class TestBookingWorkflow:
 
 
 class TestTripWorkflow:
-    def _create_approved_booking(self, app, admin_user, vehicle, start_offset_days=100):
+    def _create_approved_booking(self, app, admin_user, vehicle, start_offset_days=0):
         with app.app_context():
+            from datetime import timezone
+            today = datetime.now(timezone.utc).date()
             b = Booking(
                 requester_name="Test", requester_id=admin_user.id, vehicle_id=vehicle.id,
-                start_datetime_planned=datetime(2027, 6, 1 + start_offset_days % 28, 8, 0),
-                end_datetime_planned=datetime(2027, 6, 1 + start_offset_days % 28, 18, 0),
+                start_datetime_planned=datetime(today.year, today.month, today.day, 8, 0),
+                end_datetime_planned=datetime(today.year, today.month, today.day, 18, 0),
                 route_from="A", route_to="B", purpose="T", status="approved",
             )
             db.session.add(b)
@@ -487,6 +489,8 @@ class TestAdminDelete:
             db.session.commit()
             vid = v.id
         r = client.post(f"/vehicles/{vid}/delete", follow_redirects=True)
-        assert b"deleted" in r.data.lower()
+        assert b"archived" in r.data.lower()
         with app.app_context():
-            assert db.session.get(Vehicle, vid) is None
+            v = db.session.get(Vehicle, vid)
+            assert v is not None
+            assert v.is_deleted is True

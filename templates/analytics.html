@@ -235,7 +235,6 @@
               <th>Device</th>
               <th>Browser</th>
               <th>Response</th>
-              <th>IP</th>
             </tr>
           </thead>
           <tbody>
@@ -253,10 +252,9 @@
               <td><i class="bi bi-{{ 'phone' if pv.device_type == 'mobile' else 'tablet' if pv.device_type == 'tablet' else 'laptop' }}"></i> {{ pv.device_type }}</td>
               <td>{{ pv.browser }}</td>
               <td>{{ pv.response_time_ms|round(1) if pv.response_time_ms else '-' }} ms</td>
-              <td class="text-muted">{{ pv.ip_address }}</td>
             </tr>
             {% else %}
-            <tr><td colspan="9" class="text-center text-muted py-3">No page views recorded yet</td></tr>
+            <tr><td colspan="8" class="text-center text-muted py-3">No page views recorded yet</td></tr>
             {% endfor %}
           </tbody>
         </table>

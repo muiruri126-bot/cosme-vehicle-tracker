@@ -66,8 +66,8 @@
                 class="d-inline">
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
             <button type="submit" class="btn btn-sm btn-outline-danger"
-                    onclick="return confirm('Are you sure you want to delete Booking #{{ b.id }}? This will also delete the associated trip data. This action cannot be undone.')">
-              <i class="bi bi-trash"></i>
+                    onclick="return confirm('Are you sure you want to archive Booking #{{ b.id }}? The associated trip data will also be archived.')">
+              <i class="bi bi-archive"></i>
             </button>
           </form>
           {% endif %}

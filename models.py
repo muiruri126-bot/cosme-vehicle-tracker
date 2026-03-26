@@ -101,11 +101,24 @@ class Vehicle(db.Model):
         db.String(20), nullable=False, default="available"
     )  # available | in_use | maintenance
 
+    # Soft-delete
+    is_deleted = db.Column(db.Boolean, nullable=False, default=False)
+    deleted_at = db.Column(db.DateTime, nullable=True)
+
     # Relationships
     bookings = db.relationship("Booking", backref="vehicle", lazy=True)
     maintenance_records = db.relationship(
         "MaintenanceRecord", backref="vehicle", lazy=True
     )
+
+    def soft_delete(self):
+        """Mark this vehicle and all its associated records as deleted."""
+        self.is_deleted = True
+        self.deleted_at = datetime.now(timezone.utc)
+        for rec in self.maintenance_records:
+            rec.soft_delete()
+        for booking in self.bookings:
+            booking.soft_delete()
 
     def __repr__(self):
         return f"<Vehicle {self.registration_number}>"
@@ -153,8 +166,19 @@ class Booking(db.Model):
         onupdate=lambda: datetime.now(timezone.utc),
     )
 
+    # Soft-delete
+    is_deleted = db.Column(db.Boolean, nullable=False, default=False)
+    deleted_at = db.Column(db.DateTime, nullable=True)
+
     # Relationships
     trip = db.relationship("Trip", backref="booking", uselist=False, lazy=True)
+
+    def soft_delete(self):
+        """Mark this booking and its trip as deleted."""
+        self.is_deleted = True
+        self.deleted_at = datetime.now(timezone.utc)
+        if self.trip:
+            self.trip.soft_delete()
 
     def __repr__(self):
         return f"<Booking {self.id} – {self.requester_name}>"
@@ -181,6 +205,15 @@ class Trip(db.Model):
     fuel_used = db.Column(db.Float, nullable=True)
     fuel_cost = db.Column(db.Float, nullable=True)  # cost of fuel in local currency
     remarks = db.Column(db.Text, nullable=True)
+
+    # Soft-delete
+    is_deleted = db.Column(db.Boolean, nullable=False, default=False)
+    deleted_at = db.Column(db.DateTime, nullable=True)
+
+    def soft_delete(self):
+        """Mark this trip as deleted."""
+        self.is_deleted = True
+        self.deleted_at = datetime.now(timezone.utc)
 
     def __repr__(self):
         return f"<Trip {self.id} for Booking {self.booking_id}>"
@@ -212,8 +245,17 @@ class MaintenanceRecord(db.Model):
         db.DateTime, nullable=False, default=lambda: datetime.now(timezone.utc)
     )
 
+    # Soft-delete
+    is_deleted = db.Column(db.Boolean, nullable=False, default=False)
+    deleted_at = db.Column(db.DateTime, nullable=True)
+
     # Relationships
     created_by = db.relationship("User", backref="maintenance_created", lazy=True)
+
+    def soft_delete(self):
+        """Mark this maintenance record as deleted."""
+        self.is_deleted = True
+        self.deleted_at = datetime.now(timezone.utc)
 
     def __repr__(self):
         return f"<Maintenance {self.id} – {self.maintenance_type} for Vehicle {self.vehicle_id}>"
@@ -280,6 +322,36 @@ class PageView(db.Model):
 
 
 # ---------------------------------------------------------------------------
+# VehicleLocation  (GPS tracking – stores location pings during active trips)
+# ---------------------------------------------------------------------------
+class VehicleLocation(db.Model):
+    __tablename__ = "vehicle_locations"
+
+    id = db.Column(db.Integer, primary_key=True)
+    vehicle_id = db.Column(
+        db.Integer, db.ForeignKey("vehicles.id"), nullable=False, index=True
+    )
+    trip_id = db.Column(
+        db.Integer, db.ForeignKey("trips.id"), nullable=False, index=True
+    )
+    latitude = db.Column(db.Float, nullable=False)
+    longitude = db.Column(db.Float, nullable=False)
+    accuracy = db.Column(db.Float, nullable=True)  # metres
+    speed = db.Column(db.Float, nullable=True)  # m/s from Geolocation API
+    heading = db.Column(db.Float, nullable=True)  # degrees
+    timestamp = db.Column(
+        db.DateTime, nullable=False,
+        default=lambda: datetime.now(timezone.utc), index=True,
+    )
+
+    vehicle = db.relationship("Vehicle", backref="locations", lazy=True)
+    trip = db.relationship("Trip", backref="locations", lazy=True)
+
+    def __repr__(self):
+        return f"<VehicleLocation {self.vehicle_id} @ {self.latitude},{self.longitude}>"
+
+
+# ---------------------------------------------------------------------------
 # Helper: Conflict Detection
 # ---------------------------------------------------------------------------
 def check_booking_conflict(vehicle_id, start_dt, end_dt, exclude_booking_id=None):
@@ -310,6 +382,8 @@ def check_booking_conflict(vehicle_id, start_dt, end_dt, exclude_booking_id=None
         Booking.vehicle_id == vehicle_id,
         # Only consider bookings that are still "active" (pending or approved)
         Booking.status.in_(["pending", "approved"]),
+        # Exclude soft-deleted bookings
+        Booking.is_deleted == False,
         # Overlap condition
         Booking.start_datetime_planned < end_dt,
         Booking.end_datetime_planned > start_dt,
