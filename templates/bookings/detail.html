@@ -178,6 +178,7 @@
 
 <!-- ── GPS live tracking (active trip) ───────────────────────────── -->
 {% if booking.trip and not booking.trip.end_actual_datetime %}
+{% if current_user.is_admin %}
 <div class="card shadow-sm mb-4 border-primary">
   <div class="card-header bg-primary text-white">
     <strong><i class="bi bi-geo-alt-fill"></i> Live GPS Tracking</strong>
@@ -195,6 +196,7 @@
     </div>
   </div>
 </div>
+{% endif %}
 <script>
 (function() {
   var tripId = {{ booking.trip.id }};
@@ -207,7 +209,7 @@
     : '{{ csrf_token() }}';
 
   if (!navigator.geolocation) {
-    statusEl.innerHTML = '<i class="bi bi-exclamation-triangle text-warning"></i> Geolocation not supported by this browser.';
+    if (statusEl) statusEl.innerHTML = '<i class="bi bi-exclamation-triangle text-warning"></i> Geolocation not supported by this browser.';
     return;
   }
 
@@ -225,8 +227,8 @@
       heading: pos.coords.heading
     };
 
-    statusEl.innerHTML = '<span class="pulse-dot" style="width:10px;height:10px;background:#198754;border-radius:50%;display:inline-block;animation:pulseDot 1.5s ease-in-out infinite;"></span> Tracking active';
-    coordsEl.textContent = 'Lat ' + pos.coords.latitude.toFixed(5) +
+    if (statusEl) statusEl.innerHTML = '<span class="pulse-dot" style="width:10px;height:10px;background:#198754;border-radius:50%;display:inline-block;animation:pulseDot 1.5s ease-in-out infinite;"></span> Tracking active';
+    if (coordsEl) coordsEl.textContent = 'Lat ' + pos.coords.latitude.toFixed(5) +
       ', Lng ' + pos.coords.longitude.toFixed(5) +
       (pos.coords.speed ? ' | ' + (pos.coords.speed * 3.6).toFixed(0) + ' km/h' : '') +
       ' | Accuracy: ' + (pos.coords.accuracy ? pos.coords.accuracy.toFixed(0) + 'm' : '?');
@@ -248,7 +250,7 @@
       case 3: msg += 'Timed out.'; break;
       default: msg += err.message;
     }
-    statusEl.innerHTML = '<i class="bi bi-exclamation-triangle text-danger"></i> ' + msg;
+    if (statusEl) statusEl.innerHTML = '<i class="bi bi-exclamation-triangle text-danger"></i> ' + msg;
   }
 
   navigator.geolocation.watchPosition(sendPosition, onError, {
