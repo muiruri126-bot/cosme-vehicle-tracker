@@ -2023,7 +2023,7 @@ def analytics_dashboard():
 
 
 @app.route("/tracking")
-@login_required
+@role_required("admin")
 def tracking_view():
     """Live map showing all vehicles currently on a trip."""
     return render_template("tracking.html")
@@ -2077,7 +2077,7 @@ def gps_update():
 
 
 @app.route("/api/gps/vehicles")
-@login_required
+@role_required("admin")
 def gps_vehicles():
     """Return the latest GPS position for every vehicle currently on a trip."""
     import math

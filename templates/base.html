@@ -84,11 +84,13 @@
             <i class="bi bi-calendar3"></i> <span>Calendar</span>
           </a>
         </li>
+        {% if current_user.is_admin %}
         <li class="nav-item">
           <a class="nav-link {{ 'active' if request.endpoint == 'tracking_view' }}" href="{{ url_for('tracking_view') }}">
             <i class="bi bi-geo-alt"></i> <span>Tracking</span>
           </a>
         </li>
+        {% endif %}
         <li class="nav-item">
           <a class="nav-link {{ 'active' if request.endpoint in ['maintenance_list', 'maintenance_add'] }}" href="{{ url_for('maintenance_list') }}">
             <i class="bi bi-wrench"></i> <span>Maintenance</span>
