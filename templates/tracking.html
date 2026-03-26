@@ -23,6 +23,16 @@
   .no-vehicles-msg { text-align: center; padding: 3rem 1rem; color: #6c757d; }
   .speed-badge { font-size: .75rem; }
   .trail-toggle { font-size: .85rem; }
+  .stat-row { display: flex; gap: .5rem; flex-wrap: wrap; margin-top: .35rem; }
+  .stat-pill {
+    display: inline-flex; align-items: center; gap: .25rem;
+    background: #f0f4f8; border-radius: .75rem; padding: 2px 8px;
+    font-size: .75rem; color: #495057;
+  }
+  .stat-pill i { font-size: .7rem; }
+  .stat-pill.elapsed { background: #fff3cd; color: #856404; }
+  .stat-pill.distance { background: #d1e7dd; color: #0f5132; }
+  .stat-pill.avgspeed { background: #cff4fc; color: #055160; }
 </style>
 {% endblock %}
 
@@ -142,8 +152,14 @@
             v.make_model + '<br>' +
             '<i class="bi bi-person"></i> ' + v.driver + '<br>' +
             '<i class="bi bi-signpost-2"></i> ' + v.route + '<br>' +
-            '<i class="bi bi-speedometer2"></i> ' + speedKmh + ' km/h<br>' +
-            '<small class="text-muted">Last: ' + v.last_update + '</small>'
+            '<hr style="margin:.4rem 0">' +
+            '<i class="bi bi-speedometer2"></i> ' + speedKmh + ' km/h &nbsp; ' +
+            '<i class="bi bi-arrow-repeat"></i> Avg ' + v.avg_speed_kmh + ' km/h<br>' +
+            '<i class="bi bi-clock"></i> Driving: ' + v.elapsed + '<br>' +
+            '<i class="bi bi-signpost-split"></i> Covered: ' + v.distance_km + ' km<br>' +
+            '<i class="bi bi-geo"></i> To: ' + v.destination + '<br>' +
+            '<small class="text-muted">Started: ' + v.trip_started + '</small><br>' +
+            '<small class="text-muted">Last ping: ' + v.last_update + '</small>'
           );
 
           // Vehicle card in side panel
@@ -162,6 +178,11 @@
             '<span class="pulse-dot me-1"></span>' +
             '<br><small class="text-muted">' + v.last_update.split(' ').slice(-1)[0] + '</small>' +
             '</div>' +
+            '</div>' +
+            '<div class="stat-row">' +
+            '<span class="stat-pill elapsed"><i class="bi bi-clock"></i> ' + v.elapsed + '</span>' +
+            '<span class="stat-pill distance"><i class="bi bi-signpost-split"></i> ' + v.distance_km + ' km</span>' +
+            '<span class="stat-pill avgspeed"><i class="bi bi-speedometer"></i> Avg ' + v.avg_speed_kmh + ' km/h</span>' +
             '</div>' +
             '<div class="mt-1">' +
             '<button class="btn btn-sm btn-outline-primary trail-toggle me-1" data-trip="' + v.trip_id + '">' +

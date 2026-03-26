@@ -2080,6 +2080,18 @@ def gps_update():
 @login_required
 def gps_vehicles():
     """Return the latest GPS position for every vehicle currently on a trip."""
+    import math
+
+    def _haversine(lat1, lon1, lat2, lon2):
+        """Return distance in km between two GPS points."""
+        R = 6371.0
+        dlat = math.radians(lat2 - lat1)
+        dlon = math.radians(lon2 - lon1)
+        a = (math.sin(dlat / 2) ** 2 +
+             math.cos(math.radians(lat1)) * math.cos(math.radians(lat2)) *
+             math.sin(dlon / 2) ** 2)
+        return R * 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a))
+
     # Find all active trips (started but not ended, not deleted)
     active_trips = (
         Trip.query.join(Booking)
@@ -2108,12 +2120,38 @@ def gps_vehicles():
         vehicle = booking.vehicle
         driver_name = booking.driver.full_name if booking.driver else "Unassigned"
 
+        # ── Elapsed time since trip started ──────────────────────────
+        now = datetime.utcnow()
+        elapsed_delta = now - trip.start_actual_datetime
+        elapsed_seconds = int(elapsed_delta.total_seconds())
+        hours, remainder = divmod(max(elapsed_seconds, 0), 3600)
+        minutes = remainder // 60
+        elapsed_str = f"{hours}h {minutes}m"
+
+        # ── Distance traveled (sum of GPS trail segments) ────────────
+        trail_points = (
+            VehicleLocation.query
+            .filter_by(trip_id=trip.id)
+            .order_by(VehicleLocation.timestamp)
+            .all()
+        )
+        distance_km = 0.0
+        for i in range(1, len(trail_points)):
+            distance_km += _haversine(
+                trail_points[i - 1].latitude, trail_points[i - 1].longitude,
+                trail_points[i].latitude, trail_points[i].longitude,
+            )
+
+        # ── Average speed ────────────────────────────────────────────
+        avg_speed_kmh = (distance_km / (elapsed_seconds / 3600.0)) if elapsed_seconds > 0 else 0.0
+
         vehicles.append({
             "vehicle_id": vehicle.id,
             "registration": vehicle.registration_number,
             "make_model": f"{vehicle.make} {vehicle.model}",
             "driver": driver_name,
             "route": f"{booking.route_from} → {booking.route_to}",
+            "destination": booking.route_to,
             "trip_id": trip.id,
             "booking_id": booking.id,
             "latitude": latest.latitude,
@@ -2122,6 +2160,12 @@ def gps_vehicles():
             "heading": latest.heading,
             "accuracy": latest.accuracy,
             "last_update": latest.timestamp.strftime("%d %b %Y %H:%M:%S"),
+            "trip_started": trip.start_actual_datetime.strftime("%d %b %Y %H:%M"),
+            "elapsed": elapsed_str,
+            "elapsed_seconds": elapsed_seconds,
+            "distance_km": round(distance_km, 1),
+            "avg_speed_kmh": round(avg_speed_kmh, 1),
+            "gps_points": len(trail_points),
         })
 
     return jsonify(vehicles)
