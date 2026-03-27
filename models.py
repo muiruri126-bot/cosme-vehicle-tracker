@@ -203,7 +203,8 @@ class Trip(db.Model):
     distance = db.Column(db.Integer, nullable=True)  # auto‑calculated
 
     fuel_used = db.Column(db.Float, nullable=True)
-    fuel_cost = db.Column(db.Float, nullable=True)  # cost of fuel in local currency
+    fuel_cost_per_litre = db.Column(db.Float, nullable=True)
+    fuel_cost = db.Column(db.Float, nullable=True)  # auto-calculated: fuel_used * fuel_cost_per_litre
     remarks = db.Column(db.Text, nullable=True)
 
     # Soft-delete

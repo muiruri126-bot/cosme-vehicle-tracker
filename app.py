@@ -321,7 +321,7 @@ with app.app_context():
     soft_delete_columns = {
         "vehicles": ["is_deleted", "deleted_at"],
         "bookings": ["is_deleted", "deleted_at"],
-        "trips": ["is_deleted", "deleted_at"],
+        "trips": ["is_deleted", "deleted_at", "fuel_cost_per_litre"],
         "maintenance_records": ["is_deleted", "deleted_at"],
     }
     for table_name, columns in soft_delete_columns.items():
@@ -335,6 +335,10 @@ with app.app_context():
                 elif col_name == "deleted_at":
                     db.session.execute(text(
                         f"ALTER TABLE {table_name} ADD COLUMN deleted_at DATETIME"
+                    ))
+                elif col_name == "fuel_cost_per_litre":
+                    db.session.execute(text(
+                        f"ALTER TABLE {table_name} ADD COLUMN fuel_cost_per_litre FLOAT"
                     ))
         db.session.commit()
 
@@ -1365,7 +1369,7 @@ def trip_end(booking_id):
         end_raw = request.form.get("end_actual_datetime", "")
         odo_end_raw = request.form.get("odometer_end", "")
         fuel_raw = request.form.get("fuel_used", "").strip()
-        cost_raw = request.form.get("fuel_cost", "").strip()
+        cost_per_litre_raw = request.form.get("fuel_cost_per_litre", "").strip()
 
         end_dt = None
         if not end_raw:
@@ -1406,13 +1410,20 @@ def trip_end(booking_id):
                 errors.append("Fuel used must be a number.")
 
         fuel_cost = None
-        if cost_raw:
+        if cost_per_litre_raw:
             try:
-                fuel_cost = float(cost_raw)
-                if fuel_cost < 0:
-                    errors.append("Fuel cost cannot be negative.")
+                fuel_cost_per_litre = float(cost_per_litre_raw)
+                if fuel_cost_per_litre < 0:
+                    errors.append("Cost per litre cannot be negative.")
             except ValueError:
-                errors.append("Fuel cost must be a number.")
+                errors.append("Cost per litre must be a number.")
+                fuel_cost_per_litre = None
+        else:
+            fuel_cost_per_litre = None
+
+        # Auto-calculate total fuel cost
+        if fuel_used and fuel_cost_per_litre:
+            fuel_cost = round(fuel_used * fuel_cost_per_litre, 2)
 
         if errors:
             for e in errors:
@@ -1423,6 +1434,7 @@ def trip_end(booking_id):
         trip.odometer_end = odometer_end
         trip.distance = odometer_end - trip.odometer_start
         trip.fuel_used = fuel_used
+        trip.fuel_cost_per_litre = fuel_cost_per_litre
         trip.fuel_cost = fuel_cost
         trip.remarks = request.form.get("remarks", "").strip() or None
 
@@ -1704,7 +1716,7 @@ def vehicle_report_export():
     # Column headers
     headers = [
         "Trip #", "Booking #", "Requester", "Driver", "Route",
-        "Start", "End", "Distance (km)", "Fuel (L)", "Fuel Cost",
+        "Start", "End", "Distance (km)", "Fuel (L)", "Cost/L", "Total Fuel Cost",
     ]
     header_fill = PatternFill(start_color="4472C4", end_color="4472C4", fill_type="solid")
     header_font_white = Font(bold=True, color="FFFFFF")
@@ -1729,14 +1741,16 @@ def vehicle_report_export():
         ws.cell(row=i, column=7, value=t.end_actual_datetime.strftime("%d %b %Y %H:%M"))
         ws.cell(row=i, column=8, value=t.distance)
         ws.cell(row=i, column=9, value=t.fuel_used or "")
-        ws.cell(row=i, column=10, value=t.fuel_cost or "")
+        ws.cell(row=i, column=10, value=t.fuel_cost_per_litre or "")
+        ws.cell(row=i, column=11, value=t.fuel_cost or "")
 
     # Totals row
     total_row = len(trips) + 5
     ws.cell(row=total_row, column=7, value="TOTAL").font = Font(bold=True)
     ws.cell(row=total_row, column=8, value=sum(t.distance or 0 for t in trips)).font = Font(bold=True)
     ws.cell(row=total_row, column=9, value=sum(t.fuel_used or 0 for t in trips)).font = Font(bold=True)
-    ws.cell(row=total_row, column=10, value=sum(t.fuel_cost or 0 for t in trips)).font = Font(bold=True)
+    ws.cell(row=total_row, column=10, value="")  # no total for cost/L
+    ws.cell(row=total_row, column=11, value=sum(t.fuel_cost or 0 for t in trips)).font = Font(bold=True)
 
     # Auto-width columns
     for col in ws.columns:

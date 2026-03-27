@@ -32,9 +32,9 @@
       <tr>
         <td><strong>Grand Total</strong></td>
         <td><strong>{{ rows | sum(attribute='trip_count') }}</strong></td>
-        <td><strong>{{ rows | sum(attribute='total_distance') or 0 }}</strong></td>
-        <td><strong>{{ "%.1f"|format(rows | sum(attribute='total_fuel') or 0) }}</strong></td>
-        <td><strong>{{ "%.2f"|format(rows | sum(attribute='total_cost') or 0) }}</strong></td>
+        <td><strong>{{ rows | rejectattr('total_distance', 'none') | sum(attribute='total_distance') }}</strong></td>
+        <td><strong>{{ "%.1f"|format(rows | rejectattr('total_fuel', 'none') | sum(attribute='total_fuel')) }}</strong></td>
+        <td><strong>{{ "%.2f"|format(rows | rejectattr('total_cost', 'none') | sum(attribute='total_cost')) }}</strong></td>
       </tr>
     </tfoot>
   </table>

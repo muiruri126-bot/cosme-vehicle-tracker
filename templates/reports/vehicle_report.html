@@ -64,8 +64,9 @@
           <th>Odo Start</th>
           <th>Odo End</th>
           <th>Distance</th>
-          <th>Fuel</th>
-          <th>Fuel Cost</th>
+          <th>Fuel (L)</th>
+          <th>Cost/L</th>
+          <th>Total Cost</th>
         </tr>
       </thead>
       <tbody>
@@ -86,13 +87,14 @@
           <td>{{ t.odometer_end }}</td>
           <td>{{ t.distance }} km</td>
           <td>{{ t.fuel_used if t.fuel_used is not none else '–' }}</td>
-          <td>{{ t.fuel_cost if t.fuel_cost is not none else '–' }}</td>
+          <td>{{ "%.2f"|format(t.fuel_cost_per_litre) if t.fuel_cost_per_litre is not none else '–' }}</td>
+          <td>{{ "%.2f"|format(t.fuel_cost) if t.fuel_cost is not none else '–' }}</td>
         </tr>
         {% endfor %}
       </tbody>
       <tfoot class="table-dark">
         <tr>
-          <td colspan="9" class="text-end"><strong>Totals</strong></td>
+          <td colspan="10" class="text-end"><strong>Totals</strong></td>
           <td><strong>{{ total_distance }} km</strong></td>
           <td></td>
           <td><strong>{{ "%.2f"|format(total_fuel_cost) if total_fuel_cost else '–' }}</strong></td>

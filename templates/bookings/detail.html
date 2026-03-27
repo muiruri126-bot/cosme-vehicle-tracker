@@ -164,8 +164,11 @@
           <dt>Fuel Used</dt>
           <dd>{{ booking.trip.fuel_used if booking.trip.fuel_used is not none else '–' }} litres</dd>
 
-          <dt>Fuel Cost</dt>
-          <dd>{{ booking.trip.fuel_cost if booking.trip.fuel_cost is not none else '–' }}</dd>
+          <dt>Cost per Litre</dt>
+          <dd>{{ booking.trip.fuel_cost_per_litre if booking.trip.fuel_cost_per_litre is not none else '–' }} KES</dd>
+
+          <dt>Total Fuel Cost</dt>
+          <dd>{{ "%.2f"|format(booking.trip.fuel_cost) if booking.trip.fuel_cost is not none else '–' }} KES</dd>
 
           <dt>Remarks</dt>
           <dd>{{ booking.trip.remarks or '–' }}</dd>
