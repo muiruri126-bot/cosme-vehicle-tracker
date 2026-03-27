@@ -161,6 +161,12 @@
           <dt>Distance</dt>
           <dd>{{ booking.trip.distance if booking.trip.distance is not none else '–' }} km</dd>
 
+          <dt>Fuel Level (Start)</dt>
+          <dd>{{ booking.trip.fuel_level_start if booking.trip.fuel_level_start is not none else '–' }} litres</dd>
+
+          <dt>Fuel Level (End)</dt>
+          <dd>{{ booking.trip.fuel_level_end if booking.trip.fuel_level_end is not none else '–' }} litres</dd>
+
           <dt>Fuel Used</dt>
           <dd>{{ booking.trip.fuel_used if booking.trip.fuel_used is not none else '–' }} litres</dd>
 

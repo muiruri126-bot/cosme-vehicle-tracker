@@ -11,6 +11,7 @@
     <p><strong>Trip started at:</strong>
        {{ trip.start_actual_datetime.strftime('%d %b %Y %H:%M') }}</p>
     <p><strong>Odometer at start:</strong> {{ trip.odometer_start }} km</p>
+    <p><strong>Fuel level at start:</strong> {{ trip.fuel_level_start }} litres</p>
   </div>
 </div>
 
@@ -33,9 +34,15 @@
           <div class="invalid-feedback">Must be ≥ {{ trip.odometer_start }} (start reading).</div>
         </div>
         <div class="col-md-6">
-          <label for="fuel_used" class="form-label">Fuel Used (litres) <small class="text-muted">– optional</small></label>
+          <label for="fuel_level_end" class="form-label">Fuel Level at End (litres)</label>
+          <input type="number" step="0.1" class="form-control" id="fuel_level_end"
+                 name="fuel_level_end" required min="0" placeholder="e.g. 12.5">
+          <div class="invalid-feedback">Fuel level is required and must be 0 or above.</div>
+        </div>
+        <div class="col-md-6">
+          <label for="fuel_used" class="form-label">Fuel Used (litres) <small class="text-muted">– auto-calculated</small></label>
           <input type="number" step="0.1" class="form-control" id="fuel_used"
-                 name="fuel_used" min="0" placeholder="e.g. 35.5">
+                 name="fuel_used" min="0" placeholder="Auto-calculated from fuel levels" readonly>
           <div class="invalid-feedback">Cannot be negative.</div>
         </div>
         <div class="col-md-6">
@@ -71,13 +78,26 @@
 {% block scripts %}
 <script>
 (function() {
-  var fuelEl = document.getElementById('fuel_used');
+  var fuelStartLevel = {{ trip.fuel_level_start if trip.fuel_level_start is not none else 0 }};
+  var fuelEndEl = document.getElementById('fuel_level_end');
+  var fuelUsedEl = document.getElementById('fuel_used');
   var costEl = document.getElementById('fuel_cost_per_litre');
   var wrapperEl = document.getElementById('fuelTotalWrapper');
   var displayEl = document.getElementById('fuelTotalDisplay');
 
+  function updateCalc() {
+    var endLevel = parseFloat(fuelEndEl.value) || 0;
+    var used = Math.max(fuelStartLevel - endLevel, 0);
+    if (fuelEndEl.value) {
+      fuelUsedEl.value = used.toFixed(1);
+    } else {
+      fuelUsedEl.value = '';
+    }
+    updateTotal();
+  }
+
   function updateTotal() {
-    var litres = parseFloat(fuelEl.value) || 0;
+    var litres = parseFloat(fuelUsedEl.value) || 0;
     var perLitre = parseFloat(costEl.value) || 0;
     var total = litres * perLitre;
     if (litres > 0 && perLitre > 0) {
@@ -88,7 +108,7 @@
     }
   }
 
-  fuelEl.addEventListener('input', updateTotal);
+  fuelEndEl.addEventListener('input', updateCalc);
   costEl.addEventListener('input', updateTotal);
 })();
 </script>

@@ -202,6 +202,8 @@ class Trip(db.Model):
     odometer_end = db.Column(db.Integer, nullable=True)
     distance = db.Column(db.Integer, nullable=True)  # auto‑calculated
 
+    fuel_level_start = db.Column(db.Float, nullable=True)  # litres at trip start
+    fuel_level_end = db.Column(db.Float, nullable=True)    # litres at trip end
     fuel_used = db.Column(db.Float, nullable=True)
     fuel_cost_per_litre = db.Column(db.Float, nullable=True)
     fuel_cost = db.Column(db.Float, nullable=True)  # auto-calculated: fuel_used * fuel_cost_per_litre

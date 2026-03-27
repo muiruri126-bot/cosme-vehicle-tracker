@@ -317,16 +317,18 @@ class TestTripWorkflow:
         login(client)
         bid = self._create_approved_booking(app, admin_user, vehicle, 0)
         r = client.post(f"/bookings/{bid}/trip/start", data={
-            "start_actual_datetime": "", "odometer_start": ""
+            "start_actual_datetime": "", "odometer_start": "", "fuel_level_start": ""
         }, follow_redirects=True)
         assert b"start date/time is required" in r.data.lower()
         assert b"odometer reading is required" in r.data.lower()
+        assert b"fuel level is required" in r.data.lower()
 
     def test_trip_start_negative_odometer(self, client, app, admin_user, vehicle):
         login(client)
         bid = self._create_approved_booking(app, admin_user, vehicle, 1)
         r = client.post(f"/bookings/{bid}/trip/start", data={
-            "start_actual_datetime": "2027-06-02T08:30", "odometer_start": "-100"
+            "start_actual_datetime": "2027-06-02T08:30", "odometer_start": "-100",
+            "fuel_level_start": "45"
         }, follow_redirects=True)
         assert b"cannot be negative" in r.data.lower()
 
@@ -334,7 +336,8 @@ class TestTripWorkflow:
         login(client)
         bid = self._create_approved_booking(app, admin_user, vehicle, 2)
         r = client.post(f"/bookings/{bid}/trip/start", data={
-            "start_actual_datetime": "2027-06-03T08:30", "odometer_start": "50000"
+            "start_actual_datetime": "2027-06-03T08:30", "odometer_start": "50000",
+            "fuel_level_start": "45"
         }, follow_redirects=True)
         assert b"trip started" in r.data.lower()
 
@@ -343,11 +346,13 @@ class TestTripWorkflow:
         bid = self._create_approved_booking(app, admin_user, vehicle, 3)
         # Start the trip first
         client.post(f"/bookings/{bid}/trip/start", data={
-            "start_actual_datetime": "2027-06-04T08:30", "odometer_start": "50000"
+            "start_actual_datetime": "2027-06-04T08:30", "odometer_start": "50000",
+            "fuel_level_start": "45"
         }, follow_redirects=True)
         # Try ending with lower odometer
         r = client.post(f"/bookings/{bid}/trip/end", data={
-            "end_actual_datetime": "2027-06-04T17:30", "odometer_end": "49000"
+            "end_actual_datetime": "2027-06-04T17:30", "odometer_end": "49000",
+            "fuel_level_end": "10"
         }, follow_redirects=True)
         assert b"cannot be less than" in r.data.lower()
 
@@ -355,10 +360,12 @@ class TestTripWorkflow:
         login(client)
         bid = self._create_approved_booking(app, admin_user, vehicle, 4)
         client.post(f"/bookings/{bid}/trip/start", data={
-            "start_actual_datetime": "2027-06-05T08:30", "odometer_start": "50000"
+            "start_actual_datetime": "2027-06-05T08:30", "odometer_start": "50000",
+            "fuel_level_start": "45"
         }, follow_redirects=True)
         r = client.post(f"/bookings/{bid}/trip/end", data={
-            "end_actual_datetime": "2027-06-05T07:00", "odometer_end": "50500"
+            "end_actual_datetime": "2027-06-05T07:00", "odometer_end": "50500",
+            "fuel_level_end": "10"
         }, follow_redirects=True)
         assert b"must be after" in r.data.lower()
 
@@ -366,11 +373,12 @@ class TestTripWorkflow:
         login(client)
         bid = self._create_approved_booking(app, admin_user, vehicle, 5)
         client.post(f"/bookings/{bid}/trip/start", data={
-            "start_actual_datetime": "2027-06-06T08:30", "odometer_start": "50000"
+            "start_actual_datetime": "2027-06-06T08:30", "odometer_start": "50000",
+            "fuel_level_start": "45"
         }, follow_redirects=True)
         r = client.post(f"/bookings/{bid}/trip/end", data={
             "end_actual_datetime": "2027-06-06T17:30", "odometer_end": "50500",
-            "fuel_used": "-10", "fuel_cost": "-500"
+            "fuel_level_end": "-10"
         }, follow_redirects=True)
         assert b"cannot be negative" in r.data.lower()
 
@@ -378,11 +386,12 @@ class TestTripWorkflow:
         login(client)
         bid = self._create_approved_booking(app, admin_user, vehicle, 6)
         client.post(f"/bookings/{bid}/trip/start", data={
-            "start_actual_datetime": "2027-06-07T08:30", "odometer_start": "50000"
+            "start_actual_datetime": "2027-06-07T08:30", "odometer_start": "50000",
+            "fuel_level_start": "45"
         }, follow_redirects=True)
         r = client.post(f"/bookings/{bid}/trip/end", data={
             "end_actual_datetime": "2027-06-07T17:30", "odometer_end": "50480",
-            "fuel_used": "45", "fuel_cost": "6750"
+            "fuel_level_end": "10", "fuel_cost_per_litre": "180"
         }, follow_redirects=True)
         assert b"trip ended" in r.data.lower()
 
@@ -399,7 +408,8 @@ class TestTripWorkflow:
             db.session.commit()
             bid = b.id
         r = client.post(f"/bookings/{bid}/trip/start", data={
-            "start_actual_datetime": "2027-07-01T08:30", "odometer_start": "50000"
+            "start_actual_datetime": "2027-07-01T08:30", "odometer_start": "50000",
+            "fuel_level_start": "45"
         }, follow_redirects=True)
         assert b"only approved bookings" in r.data.lower()
 

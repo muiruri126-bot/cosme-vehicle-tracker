@@ -321,7 +321,7 @@ with app.app_context():
     soft_delete_columns = {
         "vehicles": ["is_deleted", "deleted_at"],
         "bookings": ["is_deleted", "deleted_at"],
-        "trips": ["is_deleted", "deleted_at", "fuel_cost_per_litre"],
+        "trips": ["is_deleted", "deleted_at", "fuel_cost_per_litre", "fuel_level_start", "fuel_level_end"],
         "maintenance_records": ["is_deleted", "deleted_at"],
     }
     for table_name, columns in soft_delete_columns.items():
@@ -339,6 +339,10 @@ with app.app_context():
                 elif col_name == "fuel_cost_per_litre":
                     db.session.execute(text(
                         f"ALTER TABLE {table_name} ADD COLUMN fuel_cost_per_litre FLOAT"
+                    ))
+                elif col_name in ("fuel_level_start", "fuel_level_end"):
+                    db.session.execute(text(
+                        f"ALTER TABLE {table_name} ADD COLUMN {col_name} FLOAT"
                     ))
         db.session.commit()
 
@@ -1306,6 +1310,7 @@ def trip_start(booking_id):
 
         start_raw = request.form.get("start_actual_datetime", "")
         odo_raw = request.form.get("odometer_start", "")
+        fuel_level_raw = request.form.get("fuel_level_start", "").strip()
 
         start_dt = None
         if not start_raw:
@@ -1327,6 +1332,17 @@ def trip_start(booking_id):
             except ValueError:
                 errors.append("Odometer reading must be a whole number.")
 
+        fuel_level_start = None
+        if not fuel_level_raw:
+            errors.append("Fuel level is required.")
+        else:
+            try:
+                fuel_level_start = float(fuel_level_raw)
+                if fuel_level_start < 0:
+                    errors.append("Fuel level cannot be negative.")
+            except ValueError:
+                errors.append("Fuel level must be a number.")
+
         if errors:
             for e in errors:
                 flash(e, "danger")
@@ -1336,6 +1352,7 @@ def trip_start(booking_id):
             booking_id=booking.id,
             start_actual_datetime=start_dt,
             odometer_start=odometer_start,
+            fuel_level_start=fuel_level_start,
         )
         # Mark vehicle as in use
         booking.vehicle.status = "in_use"
@@ -1368,7 +1385,7 @@ def trip_end(booking_id):
 
         end_raw = request.form.get("end_actual_datetime", "")
         odo_end_raw = request.form.get("odometer_end", "")
-        fuel_raw = request.form.get("fuel_used", "").strip()
+        fuel_level_end_raw = request.form.get("fuel_level_end", "").strip()
         cost_per_litre_raw = request.form.get("fuel_cost_per_litre", "").strip()
 
         end_dt = None
@@ -1399,16 +1416,24 @@ def trip_end(booking_id):
                 f"odometer ({trip.odometer_start})."
             )
 
-        # Optional numeric fields
-        fuel_used = None
-        if fuel_raw:
+        # Fuel level at end (required)
+        fuel_level_end = None
+        if not fuel_level_end_raw:
+            errors.append("Fuel level at end is required.")
+        else:
             try:
-                fuel_used = float(fuel_raw)
-                if fuel_used < 0:
-                    errors.append("Fuel used cannot be negative.")
+                fuel_level_end = float(fuel_level_end_raw)
+                if fuel_level_end < 0:
+                    errors.append("Fuel level cannot be negative.")
             except ValueError:
-                errors.append("Fuel used must be a number.")
+                errors.append("Fuel level must be a number.")
 
+        # Auto-calculate fuel used from fuel levels
+        fuel_used = None
+        if fuel_level_end is not None and trip.fuel_level_start is not None:
+            fuel_used = round(max(trip.fuel_level_start - fuel_level_end, 0), 1)
+
+        # Cost per litre (optional)
         fuel_cost = None
         if cost_per_litre_raw:
             try:
@@ -1433,6 +1458,7 @@ def trip_end(booking_id):
         trip.end_actual_datetime = end_dt
         trip.odometer_end = odometer_end
         trip.distance = odometer_end - trip.odometer_start
+        trip.fuel_level_end = fuel_level_end
         trip.fuel_used = fuel_used
         trip.fuel_cost_per_litre = fuel_cost_per_litre
         trip.fuel_cost = fuel_cost
